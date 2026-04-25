@@ -14,8 +14,8 @@
     <!-- Styles -->
     <link rel="stylesheet" href="{% static 'dashboard/css/dashboard.css' %}">
 
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <!-- ApexCharts -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.45.1/dist/apexcharts.min.js"></script>
 </head>
 <body>
 
@@ -36,7 +36,7 @@
                     <span class="pulse-dot"></span>
                     <span>Données en direct</span>
                 </div>
-                <div class="header-badge" id="last-update">
+                <div class="header-badge">
                     📅 Année académique en cours
                 </div>
             </div>
@@ -44,120 +44,118 @@
     </header>
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <!--  SUMMARY CARDS                                                     -->
+    <!--  MAIN CONTENT                                                      -->
     <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <div class="summary-bar" id="summary-section">
-        <div class="summary-card">
-            <div class="summary-icon">🎓</div>
-            <div class="summary-info">
-                <span class="summary-label">Apprenants</span>
-                <span class="summary-value loading" id="summary-apprenants">—</span>
-            </div>
-        </div>
-        <div class="summary-card">
-            <div class="summary-icon">👥</div>
-            <div class="summary-info">
-                <span class="summary-label">Personnel</span>
-                <span class="summary-value loading" id="summary-personnel">—</span>
-            </div>
-        </div>
-        <div class="summary-card">
-            <div class="summary-icon">📊</div>
-            <div class="summary-info">
-                <span class="summary-label">Total Général</span>
-                <span class="summary-value loading" id="summary-total">—</span>
-            </div>
-        </div>
-    </div>
+    <div class="main-container">
 
-    <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <!--  APPRENANTS SECTION                                                -->
-    <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <section class="section section-apprenants" id="section-apprenants">
-        <div class="section-header">
-            <div class="section-icon">🎓</div>
-            <h2 class="section-title">Statistiques des Apprenants</h2>
-            <div class="section-divider"></div>
+        <!-- LOADER -->
+        <div id="main-loader" style="text-align:center;padding:80px 20px">
+            <div class="spinner"></div>
+            <p style="margin-top:12px;color:#64748b;font-size:.82rem">Chargement des statistiques…</p>
         </div>
 
-        <div class="chart-grid chart-grid-5">
-            <!-- Genre -->
-            <div class="chart-card" id="chart-appr-genre">
-                <div class="chart-card-header">
-                    <span class="chart-card-title">Genre</span>
-                    <span class="chart-card-badge">—</span>
+        <!-- CONTENT (hidden until loaded) -->
+        <div id="main-content" style="display:none">
+
+            <!-- ═══ HERO KPI CARDS ═══ -->
+            <div class="stats-hero" id="hero-summary"></div>
+
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!--  GENRES EN AVANT (top priority)                            -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <div class="section-title section-toggle" onclick="toggleSection('sec-genres')">
+                <span class="sec-icon">♂♀</span> Répartition par Genre
+                <span class="section-chevron" id="chev-sec-genres">▼</span>
+            </div>
+            <div class="section-body" id="sec-genres">
+                <div class="chart-grid chart-grid-2">
+                    <!-- Apprenants Genre -->
+                    <div class="chart-card" id="chart-appr-genre">
+                        <h3>
+                            <span class="card-icon">🎓</span> Genre des Apprenants
+                            <span class="card-badge">—</span>
+                        </h3>
+                        <div class="chart-wrap"></div>
+                    </div>
+                    <!-- Personnel Genre -->
+                    <div class="chart-card" id="chart-pers-genre">
+                        <h3>
+                            <span class="card-icon">👥</span> Genre du Personnel
+                            <span class="card-badge">—</span>
+                        </h3>
+                        <div class="chart-wrap"></div>
+                    </div>
                 </div>
-                <div class="chart-wrapper"></div>
             </div>
 
-            <!-- Promotion -->
-            <div class="chart-card" id="chart-appr-promotion">
-                <div class="chart-card-header">
-                    <span class="chart-card-title">Promotion</span>
-                    <span class="chart-card-badge">—</span>
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!--  APPRENANTS DETAILS                                        -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <div class="section-title section-toggle" onclick="toggleSection('sec-apprenants')">
+                <span class="sec-icon">🎓</span> Statistiques des Apprenants
+                <span class="section-chevron" id="chev-sec-apprenants">▼</span>
+            </div>
+            <div class="section-body" id="sec-apprenants">
+                <div class="chart-grid chart-grid-3">
+                    <!-- Promotion -->
+                    <div class="chart-card" id="chart-appr-promotion">
+                        <h3>
+                            <span class="card-icon">📚</span> Effectif par Promotion
+                            <span class="card-badge">—</span>
+                        </h3>
+                        <div class="chart-wrap"></div>
+                    </div>
+                    <!-- Province -->
+                    <div class="chart-card" id="chart-appr-province">
+                        <h3>
+                            <span class="card-icon">🗺️</span> Province de Provenance
+                            <span class="card-badge">—</span>
+                        </h3>
+                        <div class="chart-wrap"></div>
+                    </div>
+                    <!-- Service -->
+                    <div class="chart-card" id="chart-appr-service">
+                        <h3>
+                            <span class="card-icon">🏢</span> Par Service / Département
+                            <span class="card-badge">—</span>
+                        </h3>
+                        <div class="chart-wrap"></div>
+                    </div>
                 </div>
-                <div class="chart-wrapper"></div>
+                <div class="chart-grid chart-grid-2" style="margin-top:14px">
+                    <!-- Grade -->
+                    <div class="chart-card" id="chart-appr-grade">
+                        <h3>
+                            <span class="card-icon">🎓</span> Par Grade Académique
+                            <span class="card-badge">—</span>
+                        </h3>
+                        <div class="chart-wrap"></div>
+                    </div>
+                </div>
             </div>
 
-            <!-- Province -->
-            <div class="chart-card" id="chart-appr-province">
-                <div class="chart-card-header">
-                    <span class="chart-card-title">Province</span>
-                    <span class="chart-card-badge">—</span>
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!--  PERSONNEL DETAILS                                         -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <div class="section-title section-toggle" onclick="toggleSection('sec-personnel')">
+                <span class="sec-icon">👥</span> Statistiques du Personnel
+                <span class="section-chevron" id="chev-sec-personnel">▼</span>
+            </div>
+            <div class="section-body" id="sec-personnel">
+                <div class="chart-grid chart-grid-2">
+                    <!-- Grade Personnel -->
+                    <div class="chart-card" id="chart-pers-grade">
+                        <h3>
+                            <span class="card-icon">🏅</span> Par Grade
+                            <span class="card-badge">—</span>
+                        </h3>
+                        <div class="chart-wrap"></div>
+                    </div>
                 </div>
-                <div class="chart-wrapper"></div>
             </div>
 
-            <!-- Service -->
-            <div class="chart-card" id="chart-appr-service">
-                <div class="chart-card-header">
-                    <span class="chart-card-title">Service</span>
-                    <span class="chart-card-badge">—</span>
-                </div>
-                <div class="chart-wrapper"></div>
-            </div>
-
-            <!-- Grade -->
-            <div class="chart-card" id="chart-appr-grade">
-                <div class="chart-card-header">
-                    <span class="chart-card-title">Grade</span>
-                    <span class="chart-card-badge">—</span>
-                </div>
-                <div class="chart-wrapper"></div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <!--  PERSONNEL SECTION                                                 -->
-    <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <section class="section section-personnel" id="section-personnel">
-        <div class="section-header">
-            <div class="section-icon">👥</div>
-            <h2 class="section-title">Statistiques du Personnel</h2>
-            <div class="section-divider"></div>
-        </div>
-
-        <div class="chart-grid chart-grid-2">
-            <!-- Genre -->
-            <div class="chart-card" id="chart-pers-genre">
-                <div class="chart-card-header">
-                    <span class="chart-card-title">Genre</span>
-                    <span class="chart-card-badge">—</span>
-                </div>
-                <div class="chart-wrapper"></div>
-            </div>
-
-            <!-- Grade -->
-            <div class="chart-card" id="chart-pers-grade">
-                <div class="chart-card-header">
-                    <span class="chart-card-title">Grade</span>
-                    <span class="chart-card-badge">—</span>
-                </div>
-                <div class="chart-wrapper"></div>
-            </div>
-        </div>
-    </section>
+        </div><!-- /main-content -->
+    </div><!-- /main-container -->
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <!--  FOOTER                                                            -->
