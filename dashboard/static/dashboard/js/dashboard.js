@@ -332,10 +332,11 @@ async function loadNestedPresence() {
                     ${expBtns(`exportApprPDF(${ci},${coi})`, `exportApprXls(${ci},${coi})`)}
                     <span class="section-chevron" id="chev-${coId}">▼</span>
                 </div><div class="section-body collapsed" id="${coId}" style="margin-left:16px">
-                    <table class="pres-table"><thead><tr><th>Date</th><th>Début</th><th>Fin</th><th>Présents</th><th>Attendus</th><th>Taux</th></tr></thead><tbody>`;
-                co.slots.forEach(s => {
+                    <table class="pres-table"><thead><tr><th>Date</th><th>Début</th><th>Fin</th><th>Présents</th><th>Attendus</th><th>Taux</th><th></th></tr></thead><tbody>`;
+                co.slots.forEach((s, si) => {
                     const color = s.taux >= 75 ? '#10b981' : s.taux >= 50 ? '#f59e0b' : '#ef4444';
-                    html += `<tr><td>${s.date}</td><td>${s.debut}</td><td>${s.fin}</td><td>${s.presents}</td><td>${s.attendus}</td><td><span style="color:${color};font-weight:700">${s.taux}%</span></td></tr>`;
+                    html += `<tr><td>${s.date}</td><td>${s.debut}</td><td>${s.fin}</td><td>${s.presents}</td><td>${s.attendus}</td><td><span style="color:${color};font-weight:700">${s.taux}%</span></td>
+                        <td style="white-space:nowrap">${expBtns(`exportApprPDF(${ci},${coi},${si})`, `exportApprXls(${ci},${coi},${si})`)}</td></tr>`;
                 });
                 html += '</tbody></table></div>';
             });
@@ -547,14 +548,15 @@ function switchTab(tabId, btn) {
 //  CONTEXTUAL EXPORT FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function _apprRows(ci, coi) {
+function _apprRows(ci, coi, si) {
     if (!_apprData) return [];
     const classes = ci !== undefined ? [_apprData[ci]] : _apprData;
     const rows = [];
     classes.forEach(cl => {
         const courses = (coi !== undefined) ? [cl.cours[coi]] : cl.cours;
         courses.forEach(co => {
-            co.slots.forEach(s => { rows.push([cl.classe, co.cours, s.date, s.debut, s.fin, s.presents, s.attendus, s.taux + '%']); });
+            const slots = (si !== undefined) ? [co.slots[si]] : co.slots;
+            slots.forEach(s => { rows.push([cl.classe, co.cours, s.date, s.debut, s.fin, s.presents, s.attendus, s.taux + '%']); });
         });
     });
     return rows;
@@ -586,18 +588,26 @@ function _pdfDoc(title) {
 }
 
 // ── Apprenants contextual ───────────────────────────────────────────────
-function exportApprPDF(ci, coi) {
-    const rows = _apprRows(ci, coi);
+function exportApprPDF(ci, coi, si) {
+    const rows = _apprRows(ci, coi, si);
     if (!rows.length) return;
-    const label = coi !== undefined ? _apprData[ci].cours[coi].cours : (ci !== undefined ? _apprData[ci].classe : 'Toutes classes');
+    let label;
+    if (si !== undefined) { const s = _apprData[ci].cours[coi].slots[si]; label = _apprData[ci].cours[coi].cours + ' — ' + s.date + ' ' + s.debut; }
+    else if (coi !== undefined) label = _apprData[ci].cours[coi].cours;
+    else if (ci !== undefined) label = _apprData[ci].classe;
+    else label = 'Toutes classes';
     const { doc, now } = _pdfDoc('Présences Apprenants — ' + label);
     doc.autoTable({ startY: 25, head: [['Classe','Cours','Date','Début','Fin','Présents','Attendus','Taux']], body: rows, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [99,102,241] } });
     doc.save('Apprenants_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf');
 }
-function exportApprXls(ci, coi) {
-    const rows = _apprRows(ci, coi);
+function exportApprXls(ci, coi, si) {
+    const rows = _apprRows(ci, coi, si);
     if (!rows.length) return;
-    const label = coi !== undefined ? _apprData[ci].cours[coi].cours : (ci !== undefined ? _apprData[ci].classe : 'Toutes classes');
+    let label;
+    if (si !== undefined) { const s = _apprData[ci].cours[coi].slots[si]; label = _apprData[ci].cours[coi].cours + ' — ' + s.date + ' ' + s.debut; }
+    else if (coi !== undefined) label = _apprData[ci].cours[coi].cours;
+    else if (ci !== undefined) label = _apprData[ci].classe;
+    else label = 'Toutes classes';
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([['Classe','Cours','Date','Début','Fin','Présents','Attendus','Taux (%)'], ...rows]);
     ws['!cols'] = [{wch:25},{wch:30},{wch:12},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8}];
