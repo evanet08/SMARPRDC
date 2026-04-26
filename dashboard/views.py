@@ -249,6 +249,9 @@ def presence_personnel_detail(request):
         cursor.execute("SELECT id_coupon, heureD FROM personnel_pointage_coupon")
         coupon_map = {r[0]: r[1] for r in cursor.fetchall()}
 
+        cursor.execute("SELECT COUNT(*) FROM personnel WHERE isAdministratif=1 AND en_fonction=1")
+        expected = cursor.fetchone()[0] or 0
+
         cursor.execute("""
             SELECT pp.id_personnel,
                 CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS agent,
@@ -301,14 +304,20 @@ def presence_personnel_detail(request):
             hd_s = parse_t(info['coupon_heureD'])
             present = arr_s is not None and arr_s <= hd_s + tolerance_h * 3600
             overtime = ''
+            overtime_s = 0
             if fe and le:
                 worked = parse_t(le) - parse_t(fe)
                 if worked > 8 * 3600:
                     extra = worked - 8 * 3600
+                    overtime_s = int(extra)
                     overtime = f"{int(extra//3600)}h{int((extra%3600)//60):02d}"
             day_list.append({'agent': info['agent'], 'arrivee': fmt_t(fe),
-                             'depart': fmt_t(le), 'present': present, 'heures_sup': overtime})
+                             'depart': fmt_t(le), 'present': present,
+                             'heures_sup': overtime, 'overtime_s': overtime_s})
         day_list.sort(key=lambda x: x['arrivee'])
-        result.append({'jour': jour, 'agents': day_list})
-    return Response(result)
+        p = sum(1 for a in day_list if a['present'])
+        result.append({'jour': jour, 'presents': p, 'absents': expected - p,
+                       'attendus': expected, 'taux': round((p / expected) * 100, 1) if expected else 0,
+                       'agents': day_list})
 
+    return Response({'total_expected': expected, 'days': result})

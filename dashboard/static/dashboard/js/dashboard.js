@@ -342,6 +342,17 @@ async function loadNestedPresence() {
 
 const MOIS_FR = {1:'Janvier',2:'Février',3:'Mars',4:'Avril',5:'Mai',6:'Juin',7:'Juillet',8:'Août',9:'Septembre',10:'Octobre',11:'Novembre',12:'Décembre'};
 
+function fmtOT(secs) {
+    if (!secs) return '—';
+    const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
+    return `${h}h${m < 10 ? '0' : ''}${m}`;
+}
+
+function metricsBadge(p, abs, att, taux) {
+    const c = taux >= 75 ? '#10b981' : taux >= 50 ? '#f59e0b' : '#ef4444';
+    return `<span style="font-size:.68rem;opacity:.8">✓${p} ✗${abs} /${att} — <strong style="color:${c}">${taux}%</strong></span>`;
+}
+
 async function loadPresencePersonnel() {
     const wrap = document.getElementById('pres-personnel-wrap');
     if (!wrap) return;
@@ -356,8 +367,9 @@ async function loadPresencePersonnel() {
             const parts = row.mois.split('-');
             const label = MOIS_FR[parseInt(parts[1])] + ' ' + parts[0];
             const mId = 'pres-month-' + mi;
-            html += `<div class="subsection-title" onclick="toggleSection('${mId}');loadMonthDays('${row.mois}')" style="margin-top:8px">
+            html += `<div class="subsection-title" onclick="toggleSection('${mId}');loadMonthWeeks('${row.mois}')" style="margin-top:8px">
                 <span class="sec-icon">📅</span> ${label}
+                <span id="month-stats-${row.mois}" style="margin-left:auto;font-size:.68rem;opacity:.7"></span>
                 <span class="section-chevron" id="chev-${mId}">▼</span>
             </div><div class="section-body collapsed" id="${mId}">
                 <div id="pers-month-${row.mois}" data-loaded="0"><div class="chart-loading"><div class="spinner"></div></div></div>
@@ -370,31 +382,83 @@ async function loadPresencePersonnel() {
     }
 }
 
-async function loadMonthDays(mois) {
+function getWeekRange(dateStr) {
+    const d = new Date(dateStr);
+    const day = d.getDay() || 7;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() - day + 1);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    const pad = n => n < 10 ? '0' + n : n;
+    const f = dt => pad(dt.getDate()) + '-' + pad(dt.getMonth() + 1) + '-' + dt.getFullYear();
+    return { key: monday.toISOString().slice(0, 10), label: `Semaine du ${f(monday)} au ${f(sunday)}` };
+}
+
+async function loadMonthWeeks(mois) {
     const container = document.getElementById('pers-month-' + mois);
     if (!container || container.dataset.loaded === '1') return;
     container.dataset.loaded = '1';
     try {
         const res = await fetch('/stats/presence/personnel/detail?mois=' + mois);
-        const days = await res.json();
+        const raw = await res.json();
+        const days = raw.days;
+        const expected = raw.total_expected;
+
+        // Group days into weeks
+        const weeks = {};
+        days.forEach(day => {
+            const w = getWeekRange(day.jour);
+            if (!weeks[w.key]) weeks[w.key] = { label: w.label, days: [], presents: 0, absents: 0, attendus: 0, overtime_s: 0 };
+            weeks[w.key].days.push(day);
+            weeks[w.key].presents += day.presents;
+            weeks[w.key].absents += day.absents;
+            weeks[w.key].attendus += day.attendus;
+            weeks[w.key].overtime_s += day.agents.reduce((s, a) => s + (a.overtime_s || 0), 0);
+        });
+
+        // Month totals
+        let mP = 0, mAbs = 0, mAtt = 0, mOT = 0;
+        Object.values(weeks).forEach(w => { mP += w.presents; mAbs += w.absents; mAtt += w.attendus; mOT += w.overtime_s; });
+        const mRate = mAtt ? ((mP / mAtt) * 100).toFixed(1) : 0;
+
+        // Update month header
+        const monthStats = document.getElementById('month-stats-' + mois);
+        if (monthStats) monthStats.innerHTML = metricsBadge(mP, mAbs, mAtt, mRate) + ` | H.Supp: <strong>${fmtOT(mOT)}</strong>`;
+
         let html = '';
-        days.forEach((day, di) => {
-            const dayId = `pers-day-${mois}-${di}`;
-            const pc = day.agents.filter(a => a.present).length;
-            html += `<div class="subsection-title" onclick="toggleSection('${dayId}')" style="margin-top:4px;margin-left:16px;font-size:.78rem;background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
-                <span class="sec-icon">📋</span> ${day.jour}
-                <span style="margin-left:auto;font-size:.68rem;opacity:.7">${pc}/${day.agents.length} présents</span>
-                <span class="section-chevron" id="chev-${dayId}">▼</span>
-            </div><div class="section-body collapsed" id="${dayId}" style="margin-left:16px">
-                <table class="pres-table"><thead><tr><th>Agent</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>H. Supp</th></tr></thead><tbody>`;
-            day.agents.forEach(a => {
-                const b = a.present ? '<span style="color:#10b981;font-weight:700">✓ Oui</span>' : '<span style="color:#ef4444;font-weight:700">✗ Non</span>';
-                html += `<tr><td>${a.agent}</td><td>${a.arrivee}</td><td>${a.depart}</td><td>${b}</td><td>${a.heures_sup||'—'}</td></tr>`;
+        const sortedWeeks = Object.entries(weeks).sort((a, b) => a[0].localeCompare(b[0]));
+        sortedWeeks.forEach(([wKey, w], wi) => {
+            const wId = `pers-w-${mois}-${wi}`;
+            const wRate = w.attendus ? ((w.presents / w.attendus) * 100).toFixed(1) : 0;
+            html += `<div class="subsection-title" onclick="toggleSection('${wId}')" style="margin-top:6px;margin-left:12px;font-size:.78rem;background:linear-gradient(135deg,#eff6ff,#dbeafe)">
+                <span class="sec-icon">📆</span> ${w.label}
+                <span style="margin-left:auto">${metricsBadge(w.presents, w.absents, w.attendus, wRate)} | H.Supp: <strong>${fmtOT(w.overtime_s)}</strong></span>
+                <span class="section-chevron" id="chev-${wId}">▼</span>
+            </div><div class="section-body collapsed" id="${wId}">`;
+
+            w.days.forEach((day, di) => {
+                const dayId = `pers-d-${mois}-${wi}-${di}`;
+                const dayOT = day.agents.reduce((s, a) => s + (a.overtime_s || 0), 0);
+                const dColor = day.taux >= 75 ? '#10b981' : day.taux >= 50 ? '#f59e0b' : '#ef4444';
+                html += `<div class="subsection-title" onclick="toggleSection('${dayId}')" style="margin-top:3px;margin-left:28px;font-size:.74rem;background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
+                    <span class="sec-icon">📋</span> ${day.jour}
+                    <span style="margin-left:auto">${metricsBadge(day.presents, day.absents, day.attendus, day.taux)} | H.Supp: <strong>${fmtOT(dayOT)}</strong></span>
+                    <span class="section-chevron" id="chev-${dayId}">▼</span>
+                </div><div class="section-body collapsed" id="${dayId}" style="margin-left:28px">
+                    <table class="pres-table"><thead><tr><th>Agent</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>H. Supp</th></tr></thead><tbody>`;
+                day.agents.forEach(a => {
+                    const b = a.present ? '<span style="color:#10b981;font-weight:700">✓ Oui</span>' : '<span style="color:#ef4444;font-weight:700">✗ Non</span>';
+                    html += `<tr><td>${a.agent}</td><td>${a.arrivee}</td><td>${a.depart}</td><td>${b}</td><td>${a.heures_sup || '—'}</td></tr>`;
+                });
+                html += '</tbody></table></div>';
             });
-            html += '</tbody></table></div>';
+            html += '</div>';
         });
         container.innerHTML = html;
-    } catch(e) { container.innerHTML = '<span style="color:#ef4444">Erreur</span>'; }
+    } catch(e) {
+        console.error('[SMARPRDC] Month detail:', e);
+        container.innerHTML = '<span style="color:#ef4444">Erreur de chargement</span>';
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
