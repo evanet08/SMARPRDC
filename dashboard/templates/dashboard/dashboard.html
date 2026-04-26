@@ -194,6 +194,10 @@
                     <!-- Cumuls summary -->
                     <div class="subsection-title" onclick="toggleSection('sub-pers-cumuls');loadPersonnelCumuls()" style="margin-top:6px">
                         <span class="sec-icon">📊</span> Cumuls Heures Supplémentaires
+                        <span class="export-btns-inline" onclick="event.stopPropagation()" style="margin-left:auto">
+                            <button class="export-btn export-pdf" onclick="exportCumulsPDF()" style="padding:2px 8px;font-size:.62rem">PDF</button>
+                            <button class="export-btn export-excel" onclick="exportCumulsXls()" style="padding:2px 8px;font-size:.62rem">Excel</button>
+                        </span>
                         <span class="section-chevron" id="chev-sub-pers-cumuls">▼</span>
                     </div>
                     <div class="section-body collapsed" id="sub-pers-cumuls">

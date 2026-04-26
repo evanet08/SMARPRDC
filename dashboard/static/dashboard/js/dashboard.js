@@ -288,6 +288,15 @@ function heroCard(colorClass, label, value, subtitle, iconEmoji, extras) {
 //  NESTED PRESENCE APPRENANTS (Class → Course → time-slot table)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+let _apprData = null; // stored for exports
+
+function expBtns(onPdf, onXls) {
+    return `<span class="export-btns-inline" onclick="event.stopPropagation()">
+        <button class="export-btn export-pdf" onclick="${onPdf}" style="padding:2px 8px;font-size:.62rem">PDF</button>
+        <button class="export-btn export-excel" onclick="${onXls}" style="padding:2px 8px;font-size:.62rem">Excel</button>
+    </span>`;
+}
+
 async function loadNestedPresence() {
     const container = document.getElementById('nested-pres-apprenants');
     if (!container) return;
@@ -295,6 +304,7 @@ async function loadNestedPresence() {
         const res = await fetch('/stats/presence/apprenants/nested');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
+        _apprData = data;
         if (!data.length) { container.innerHTML = '<div class="chart-error"><span class="chart-error-text">Aucune donnée</span></div>'; return; }
         let html = '';
         data.forEach((cl, ci) => {
@@ -307,6 +317,7 @@ async function loadNestedPresence() {
             html += `<div class="subsection-title" onclick="toggleSection('${clId}')" style="margin-top:8px">
                 <span class="sec-icon">📚</span> ${cl.classe}
                 <span style="margin-left:auto;font-size:.72rem;opacity:.7">${totalSlots} séances — <strong style="color:${clColor}">${clRate}%</strong></span>
+                ${expBtns(`exportApprPDF(${ci})`, `exportApprXls(${ci})`)}
                 <span class="section-chevron" id="chev-${clId}">▼</span>
             </div><div class="section-body collapsed" id="${clId}">`;
             cl.cours.forEach((co, coi) => {
@@ -318,6 +329,7 @@ async function loadNestedPresence() {
                 html += `<div class="subsection-title" onclick="toggleSection('${coId}')" style="margin-top:4px;margin-left:16px;font-size:.78rem;background:linear-gradient(135deg,#eef2ff,#e0e7ff)">
                     <span class="sec-icon">📖</span> ${co.cours}
                     <span style="margin-left:auto;font-size:.68rem;opacity:.7">${co.slots.length} séances — <strong style="color:${coColor}">${coRate}%</strong></span>
+                    ${expBtns(`exportApprPDF(${ci},${coi})`, `exportApprXls(${ci},${coi})`)}
                     <span class="section-chevron" id="chev-${coId}">▼</span>
                 </div><div class="section-body collapsed" id="${coId}" style="margin-left:16px">
                     <table class="pres-table"><thead><tr><th>Date</th><th>Début</th><th>Fin</th><th>Présents</th><th>Attendus</th><th>Taux</th></tr></thead><tbody>`;
@@ -353,6 +365,8 @@ function rateBadge(taux) {
     return `<strong style="color:${c}">${taux}%</strong>`;
 }
 
+let _persData = {}; // month -> { days, weeks } stored for exports
+
 async function loadPresencePersonnel() {
     const wrap = document.getElementById('pres-personnel-wrap');
     if (!wrap) return;
@@ -370,6 +384,7 @@ async function loadPresencePersonnel() {
             html += `<div class="subsection-title" onclick="toggleSection('${mId}');loadMonthWeeks('${row.mois}')" style="margin-top:8px">
                 <span class="sec-icon">📅</span> ${label}
                 <span id="month-stats-${row.mois}" style="margin-left:auto;font-size:.75rem"></span>
+                ${expBtns(`exportPersPDF('${row.mois}')`, `exportPersXls('${row.mois}')`)}
                 <span class="section-chevron" id="chev-${mId}">▼</span>
             </div><div class="section-body collapsed" id="${mId}">
                 <div id="pers-month-${row.mois}" data-loaded="0"><div class="chart-loading"><div class="spinner"></div></div></div>
@@ -406,11 +421,15 @@ async function loadMonthWeeks(mois) {
         const weeks = {};
         days.forEach(day => {
             const w = getWeekRange(day.jour);
-            if (!weeks[w.key]) weeks[w.key] = { label: w.label, days: [], presents: 0, attendus: 0 };
+            if (!weeks[w.key]) weeks[w.key] = { label: w.label, key: w.key, days: [], presents: 0, attendus: 0 };
             weeks[w.key].days.push(day);
             weeks[w.key].presents += day.presents;
             weeks[w.key].attendus += day.attendus;
         });
+
+        // Store for exports
+        const sortedWeeks = Object.entries(weeks).sort((a, b) => a[0].localeCompare(b[0]));
+        _persData[mois] = { days, weeks: sortedWeeks.map(([k, w]) => w) };
 
         let mP = 0, mAtt = 0;
         Object.values(weeks).forEach(w => { mP += w.presents; mAtt += w.attendus; });
@@ -419,13 +438,13 @@ async function loadMonthWeeks(mois) {
         if (monthStats) monthStats.innerHTML = '— ' + rateBadge(mRate);
 
         let html = '';
-        const sortedWeeks = Object.entries(weeks).sort((a, b) => a[0].localeCompare(b[0]));
         sortedWeeks.forEach(([wKey, w], wi) => {
             const wId = `pers-w-${mois}-${wi}`;
             const wRate = w.attendus ? ((w.presents / w.attendus) * 100).toFixed(1) : 0;
             html += `<div class="subsection-title" onclick="toggleSection('${wId}')" style="margin-top:6px;margin-left:12px;font-size:.78rem;background:linear-gradient(135deg,#eff6ff,#dbeafe)">
                 <span class="sec-icon">📆</span> ${w.label}
                 <span style="margin-left:auto;font-size:.75rem">— ${rateBadge(wRate)}</span>
+                ${expBtns(`exportPersPDF('${mois}',${wi})`, `exportPersXls('${mois}',${wi})`)}
                 <span class="section-chevron" id="chev-${wId}">▼</span>
             </div><div class="section-body collapsed" id="${wId}">`;
 
@@ -434,6 +453,7 @@ async function loadMonthWeeks(mois) {
                 html += `<div class="subsection-title" onclick="toggleSection('${dayId}')" style="margin-top:3px;margin-left:28px;font-size:.74rem;background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
                     <span class="sec-icon">📋</span> ${day.jour}
                     <span style="margin-left:auto;font-size:.72rem">— ${rateBadge(day.taux)}</span>
+                    ${expBtns(`exportPersPDF('${mois}',${wi},${di})`, `exportPersXls('${mois}',${wi},${di})`)}
                     <span class="section-chevron" id="chev-${dayId}">▼</span>
                 </div><div class="section-body collapsed" id="${dayId}" style="margin-left:28px">
                     <table class="pres-table"><thead><tr><th>Agent</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>H. Supp</th></tr></thead><tbody>`;
@@ -524,150 +544,155 @@ function switchTab(tabId, btn) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  EXPORT FUNCTIONALITY (PDF + Excel)
+//  CONTEXTUAL EXPORT FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Global data caches for exports (populated by loaders)
-let _exportApprenants = null;
-let _exportPersonnelAll = null;
-let _exportCumuls = null;
-
-// Store presence data when loaded
-const _origLoadNested = loadNestedPresence;
-loadNestedPresence = async function() {
-    await _origLoadNested();
-    try {
-        const res = await fetch('/stats/presence/apprenants/nested');
-        if (res.ok) _exportApprenants = await res.json();
-    } catch(e) {}
-};
-
-function _collectPersonnelRows() {
-    // Lazy collect from cached cumuls
-    if (!_exportCumuls) return [];
-    return _exportCumuls;
-}
-
-async function _ensureCumulsData() {
-    if (_exportCumuls) return;
-    try {
-        const sumRes = await fetch('/stats/presence/personnel/summary');
-        const months = await sumRes.json();
-        const allData = await Promise.all(months.map(m =>
-            fetch('/stats/presence/personnel/detail?mois=' + m.mois).then(r => r.json())
-        ));
-        const agentMap = {};
-        const persRows = [];
-        allData.forEach(raw => {
-            raw.days.forEach(day => {
-                day.agents.forEach(a => {
-                    persRows.push({ agent: a.agent, date: day.jour, present: a.present ? 'Oui' : 'Non', heures_sup: a.heures_sup || '' });
-                    if (!agentMap[a.agent]) agentMap[a.agent] = { present: 0, absent: 0, expected: 0, overtime_s: 0 };
-                    agentMap[a.agent].expected++;
-                    if (a.present) agentMap[a.agent].present++;
-                    else agentMap[a.agent].absent++;
-                    agentMap[a.agent].overtime_s += (a.overtime_s || 0);
-                });
-            });
+function _apprRows(ci, coi) {
+    if (!_apprData) return [];
+    const classes = ci !== undefined ? [_apprData[ci]] : _apprData;
+    const rows = [];
+    classes.forEach(cl => {
+        const courses = (coi !== undefined) ? [cl.cours[coi]] : cl.cours;
+        courses.forEach(co => {
+            co.slots.forEach(s => { rows.push([cl.classe, co.cours, s.date, s.debut, s.fin, s.presents, s.attendus, s.taux + '%']); });
         });
-        _exportPersonnelAll = persRows;
-        _exportCumuls = Object.entries(agentMap).sort((a, b) => b[1].overtime_s - a[1].overtime_s)
-            .map(([name, ag]) => ({ agent: name, presences: ag.present, absences: ag.absent, attendus: ag.expected, heures_sup: fmtOT(ag.overtime_s) }));
-    } catch(e) { console.error('Export data error:', e); }
+    });
+    return rows;
 }
 
-async function exportGlobalPDF() {
-    await _ensureCumulsData();
+function _persRows(mois, wi, di) {
+    const data = _persData[mois];
+    if (!data) return [];
+    let days;
+    if (di !== undefined) days = [data.weeks[wi].days[di]];
+    else if (wi !== undefined) days = data.weeks[wi].days;
+    else days = data.days;
+    const rows = [];
+    days.forEach(day => {
+        day.agents.forEach(a => {
+            rows.push([a.agent, day.jour, a.present ? 'Oui' : 'Non', a.heures_sup || '']);
+        });
+    });
+    return rows;
+}
+
+function _pdfDoc(title) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('l', 'mm', 'a4');
     const now = new Date().toLocaleDateString('fr-FR');
+    doc.setFontSize(14); doc.text('SMARPRDC — ' + title, 14, 15);
+    doc.setFontSize(8); doc.text('Généré le ' + now, 14, 21);
+    return { doc, now };
+}
 
-    // Title
-    doc.setFontSize(16);
-    doc.text('SMARPRDC — Rapport de Présences', 14, 15);
-    doc.setFontSize(9);
-    doc.text('Généré le ' + now, 14, 22);
+// ── Apprenants contextual ───────────────────────────────────────────────
+function exportApprPDF(ci, coi) {
+    const rows = _apprRows(ci, coi);
+    if (!rows.length) return;
+    const label = coi !== undefined ? _apprData[ci].cours[coi].cours : (ci !== undefined ? _apprData[ci].classe : 'Toutes classes');
+    const { doc, now } = _pdfDoc('Présences Apprenants — ' + label);
+    doc.autoTable({ startY: 25, head: [['Classe','Cours','Date','Début','Fin','Présents','Attendus','Taux']], body: rows, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [99,102,241] } });
+    doc.save('Apprenants_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf');
+}
+function exportApprXls(ci, coi) {
+    const rows = _apprRows(ci, coi);
+    if (!rows.length) return;
+    const label = coi !== undefined ? _apprData[ci].cours[coi].cours : (ci !== undefined ? _apprData[ci].classe : 'Toutes classes');
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([['Classe','Cours','Date','Début','Fin','Présents','Attendus','Taux (%)'], ...rows]);
+    ws['!cols'] = [{wch:25},{wch:30},{wch:12},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8}];
+    XLSX.utils.book_append_sheet(wb, ws, 'Apprenants');
+    XLSX.writeFile(wb, 'Apprenants_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.xlsx');
+}
 
-    // Sheet 1: Apprenants
-    if (_exportApprenants && _exportApprenants.length) {
-        doc.setFontSize(12);
-        doc.text('Présences Apprenants', 14, 30);
-        const rows = [];
-        _exportApprenants.forEach(cl => {
-            cl.cours.forEach(co => {
-                co.slots.forEach(s => {
-                    rows.push([cl.classe, co.cours, s.date, s.debut, s.fin, s.presents, s.attendus, s.taux + '%']);
-                });
-            });
-        });
-        doc.autoTable({
-            startY: 33, head: [['Classe', 'Cours', 'Date', 'Début', 'Fin', 'Présents', 'Attendus', 'Taux']],
-            body: rows, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [99, 102, 241] }
-        });
+// ── Personnel contextual ────────────────────────────────────────────────
+function exportPersPDF(mois, wi, di) {
+    const rows = _persRows(mois, wi, di);
+    if (!rows.length) return;
+    let label = mois;
+    if (di !== undefined) label = _persData[mois].weeks[wi].days[di].jour;
+    else if (wi !== undefined) label = _persData[mois].weeks[wi].label;
+    const { doc } = _pdfDoc('Présences Personnel — ' + label);
+    doc.autoTable({ startY: 25, head: [['Agent','Date','Présence','Heures supp']], body: rows, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [16,185,129] } });
+    doc.save('Personnel_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf');
+}
+function exportPersXls(mois, wi, di) {
+    const rows = _persRows(mois, wi, di);
+    if (!rows.length) return;
+    let label = mois;
+    if (di !== undefined) label = _persData[mois].weeks[wi].days[di].jour;
+    else if (wi !== undefined) label = _persData[mois].weeks[wi].label;
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([['Agent','Date','Présence','Heures supp'], ...rows]);
+    ws['!cols'] = [{wch:35},{wch:12},{wch:10},{wch:12}];
+    XLSX.utils.book_append_sheet(wb, ws, 'Personnel');
+    XLSX.writeFile(wb, 'Personnel_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.xlsx');
+}
+
+// ── Cumuls export ───────────────────────────────────────────────────────
+function exportCumulsPDF() {
+    const tbl = document.querySelector('#pres-personnel-cumuls table');
+    if (!tbl) return;
+    const { doc } = _pdfDoc('Cumuls Heures Supplémentaires');
+    doc.autoTable({ html: tbl, startY: 25, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [245,158,11] } });
+    doc.save('Cumuls_Heures_Supp.pdf');
+}
+function exportCumulsXls() {
+    const tbl = document.querySelector('#pres-personnel-cumuls table');
+    if (!tbl) return;
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.table_to_sheet(tbl);
+    ws['!cols'] = [{wch:35},{wch:12},{wch:12},{wch:14},{wch:16}];
+    XLSX.utils.book_append_sheet(wb, ws, 'Cumuls');
+    XLSX.writeFile(wb, 'Cumuls_Heures_Supp.xlsx');
+}
+
+// ── Global export (all sections) ────────────────────────────────────────
+async function exportGlobalPDF() {
+    const apprRows = _apprRows();
+    const { doc, now } = _pdfDoc('Rapport Complet de Présences');
+    if (apprRows.length) {
+        doc.autoTable({ startY: 25, head: [['Classe','Cours','Date','Début','Fin','Présents','Attendus','Taux']], body: apprRows, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [99,102,241] } });
     }
-
-    // Sheet 2: Personnel
-    if (_exportPersonnelAll && _exportPersonnelAll.length) {
+    // Personnel from all loaded months
+    const allPersRows = [];
+    Object.keys(_persData).forEach(m => { allPersRows.push(..._persRows(m)); });
+    if (allPersRows.length) {
         doc.addPage();
-        doc.setFontSize(12);
-        doc.text('Présences Personnel (Détails)', 14, 15);
-        doc.autoTable({
-            startY: 18, head: [['Agent', 'Date', 'Présence', 'Heures supp']],
-            body: _exportPersonnelAll.map(r => [r.agent, r.date, r.present, r.heures_sup]),
-            styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [16, 185, 129] }
-        });
+        doc.setFontSize(12); doc.text('Présences Personnel', 14, 15);
+        doc.autoTable({ startY: 20, head: [['Agent','Date','Présence','Heures supp']], body: allPersRows, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [16,185,129] } });
     }
-
-    // Sheet 3: Cumuls
-    if (_exportCumuls && _exportCumuls.length) {
+    // Cumuls
+    const tbl = document.querySelector('#pres-personnel-cumuls table');
+    if (tbl) {
         doc.addPage();
-        doc.setFontSize(12);
-        doc.text('Cumuls Heures Supplémentaires', 14, 15);
-        doc.autoTable({
-            startY: 18, head: [['Agent', 'Présences', 'Absences', 'Attendus', 'H. Supp cumulées']],
-            body: _exportCumuls.map(r => [r.agent, r.presences, r.absences, r.attendus, r.heures_sup]),
-            styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [245, 158, 11] }
-        });
+        doc.setFontSize(12); doc.text('Cumuls Heures Supplémentaires', 14, 15);
+        doc.autoTable({ html: tbl, startY: 20, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [245,158,11] } });
     }
-
     doc.save('SMARPRDC_Presences_' + now.replace(/\//g, '-') + '.pdf');
 }
 
 async function exportGlobalExcel() {
-    await _ensureCumulsData();
     const wb = XLSX.utils.book_new();
-
-    // Sheet 1: Apprenants
-    if (_exportApprenants && _exportApprenants.length) {
-        const rows = [['Classe', 'Cours', 'Date', 'Heure début', 'Heure fin', 'Présents', 'Attendus', 'Taux (%)']];
-        _exportApprenants.forEach(cl => {
-            cl.cours.forEach(co => {
-                co.slots.forEach(s => { rows.push([cl.classe, co.cours, s.date, s.debut, s.fin, s.presents, s.attendus, s.taux]); });
-            });
-        });
-        const ws = XLSX.utils.aoa_to_sheet(rows);
-        ws['!cols'] = [{ wch: 25 }, { wch: 30 }, { wch: 12 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }];
+    const apprRows = _apprRows();
+    if (apprRows.length) {
+        const ws = XLSX.utils.aoa_to_sheet([['Classe','Cours','Date','Début','Fin','Présents','Attendus','Taux (%)'], ...apprRows]);
+        ws['!cols'] = [{wch:25},{wch:30},{wch:12},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8}];
         XLSX.utils.book_append_sheet(wb, ws, 'Apprenants');
     }
-
-    // Sheet 2: Personnel
-    if (_exportPersonnelAll && _exportPersonnelAll.length) {
-        const rows = [['Agent', 'Date', 'Présence', 'Heures supp']];
-        _exportPersonnelAll.forEach(r => { rows.push([r.agent, r.date, r.present, r.heures_sup]); });
-        const ws = XLSX.utils.aoa_to_sheet(rows);
-        ws['!cols'] = [{ wch: 35 }, { wch: 12 }, { wch: 10 }, { wch: 12 }];
+    const allPersRows = [];
+    Object.keys(_persData).forEach(m => { allPersRows.push(..._persRows(m)); });
+    if (allPersRows.length) {
+        const ws = XLSX.utils.aoa_to_sheet([['Agent','Date','Présence','Heures supp'], ...allPersRows]);
+        ws['!cols'] = [{wch:35},{wch:12},{wch:10},{wch:12}];
         XLSX.utils.book_append_sheet(wb, ws, 'Personnel');
     }
-
-    // Sheet 3: Cumuls
-    if (_exportCumuls && _exportCumuls.length) {
-        const rows = [['Agent', 'Présences', 'Absences', 'Total attendu', 'H. Supp cumulées']];
-        _exportCumuls.forEach(r => { rows.push([r.agent, r.presences, r.absences, r.attendus, r.heures_sup]); });
-        const ws = XLSX.utils.aoa_to_sheet(rows);
-        ws['!cols'] = [{ wch: 35 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }];
+    const tbl = document.querySelector('#pres-personnel-cumuls table');
+    if (tbl) {
+        const ws = XLSX.utils.table_to_sheet(tbl);
+        ws['!cols'] = [{wch:35},{wch:12},{wch:12},{wch:14},{wch:16}];
         XLSX.utils.book_append_sheet(wb, ws, 'Cumuls');
     }
-
     const now = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
     XLSX.writeFile(wb, 'SMARPRDC_Presences_' + now + '.xlsx');
 }
