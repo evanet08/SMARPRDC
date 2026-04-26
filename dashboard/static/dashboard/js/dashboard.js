@@ -316,10 +316,13 @@ async function loadNestedPresence() {
             const clColor = clRate >= 75 ? '#10b981' : clRate >= 50 ? '#f59e0b' : '#ef4444';
             html += `<div class="subsection-title" onclick="toggleSection('${clId}')" style="margin-top:8px">
                 <span class="sec-icon">📚</span> ${cl.classe}
-                <span style="margin-left:auto;font-size:.72rem;opacity:.7">${totalSlots} séances — <strong style="color:${clColor}">${clRate}%</strong></span>
-                ${expBtns(`exportApprPDF(${ci})`, `exportApprXls(${ci})`)}
-                <span class="section-chevron" id="chev-${clId}">▼</span>
+                <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+                    <span style="font-size:.72rem;opacity:.7">${totalSlots} séances — <strong style="color:${clColor}">${clRate}%</strong></span>
+                    ${expBtns(`exportApprPDF(${ci})`, `exportApprXls(${ci})`)}
+                    <span class="section-chevron" id="chev-${clId}">▼</span>
+                </span>
             </div><div class="section-body collapsed" id="${clId}">`;
+
             cl.cours.forEach((co, coi) => {
                 const coId = `nested-co-${ci}-${coi}`;
                 const coPresent = co.slots.reduce((s, sl) => s + sl.presents, 0);
@@ -328,15 +331,18 @@ async function loadNestedPresence() {
                 const coColor = coRate >= 75 ? '#10b981' : coRate >= 50 ? '#f59e0b' : '#ef4444';
                 html += `<div class="subsection-title" onclick="toggleSection('${coId}')" style="margin-top:4px;margin-left:16px;font-size:.78rem;background:linear-gradient(135deg,#eef2ff,#e0e7ff)">
                     <span class="sec-icon">📖</span> ${co.cours}
-                    <span style="margin-left:auto;font-size:.68rem;opacity:.7">${co.slots.length} séances — <strong style="color:${coColor}">${coRate}%</strong></span>
-                    ${expBtns(`exportApprPDF(${ci},${coi})`, `exportApprXls(${ci},${coi})`)}
-                    <span class="section-chevron" id="chev-${coId}">▼</span>
+                    <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+                        <span style="font-size:.68rem;opacity:.7">${co.slots.length} séances — <strong style="color:${coColor}">${coRate}%</strong></span>
+                        ${expBtns(`exportApprPDF(${ci},${coi})`, `exportApprXls(${ci},${coi})`)}
+                        <span class="section-chevron" id="chev-${coId}">▼</span>
+                    </span>
                 </div><div class="section-body collapsed" id="${coId}" style="margin-left:16px">
-                    <table class="pres-table"><thead><tr><th>Date</th><th>Début</th><th>Fin</th><th>Présents</th><th>Attendus</th><th>Taux</th><th></th></tr></thead><tbody>`;
+                    <table class="pres-table"><thead><tr><th>Date</th><th>Début</th><th>Fin</th><th>Présents</th><th>Absents</th><th>Attendus</th><th>Taux</th><th></th></tr></thead><tbody>`;
                 co.slots.forEach((s, si) => {
+                    const absent = s.attendus - s.presents;
                     const color = s.taux >= 75 ? '#10b981' : s.taux >= 50 ? '#f59e0b' : '#ef4444';
-                    html += `<tr><td>${s.date}</td><td>${s.debut}</td><td>${s.fin}</td><td>${s.presents}</td><td>${s.attendus}</td><td><span style="color:${color};font-weight:700">${s.taux}%</span></td>
-                        <td style="white-space:nowrap">${expBtns(`exportApprPDF(${ci},${coi},${si})`, `exportApprXls(${ci},${coi},${si})`)}</td></tr>`;
+                    html += `<tr><td>${s.date}</td><td>${s.debut}</td><td>${s.fin}</td><td style="color:#10b981;font-weight:600">${s.presents}</td><td style="color:#ef4444;font-weight:600">${absent}</td><td>${s.attendus}</td><td><span style="color:${color};font-weight:700">${s.taux}%</span></td>
+                        <td style="white-space:nowrap;text-align:right">${expBtns(`exportApprPDF(${ci},${coi},${si})`, `exportApprXls(${ci},${coi},${si})`)}</td></tr>`;
                 });
                 html += '</tbody></table></div>';
             });
@@ -384,9 +390,11 @@ async function loadPresencePersonnel() {
             const mId = 'pres-month-' + mi;
             html += `<div class="subsection-title" onclick="toggleSection('${mId}');loadMonthWeeks('${row.mois}')" style="margin-top:8px">
                 <span class="sec-icon">📅</span> ${label}
-                <span id="month-stats-${row.mois}" style="margin-left:auto;font-size:.75rem"></span>
-                ${expBtns(`exportPersPDF('${row.mois}')`, `exportPersXls('${row.mois}')`)}
-                <span class="section-chevron" id="chev-${mId}">▼</span>
+                <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+                    <span id="month-stats-${row.mois}" style="font-size:.75rem"></span>
+                    ${expBtns(`exportPersPDF('${row.mois}')`, `exportPersXls('${row.mois}')`)}
+                    <span class="section-chevron" id="chev-${mId}">▼</span>
+                </span>
             </div><div class="section-body collapsed" id="${mId}">
                 <div id="pers-month-${row.mois}" data-loaded="0"><div class="chart-loading"><div class="spinner"></div></div></div>
             </div>`;
@@ -444,18 +452,22 @@ async function loadMonthWeeks(mois) {
             const wRate = w.attendus ? ((w.presents / w.attendus) * 100).toFixed(1) : 0;
             html += `<div class="subsection-title" onclick="toggleSection('${wId}')" style="margin-top:6px;margin-left:12px;font-size:.78rem;background:linear-gradient(135deg,#eff6ff,#dbeafe)">
                 <span class="sec-icon">📆</span> ${w.label}
-                <span style="margin-left:auto;font-size:.75rem">— ${rateBadge(wRate)}</span>
-                ${expBtns(`exportPersPDF('${mois}',${wi})`, `exportPersXls('${mois}',${wi})`)}
-                <span class="section-chevron" id="chev-${wId}">▼</span>
+                <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+                    <span style="font-size:.75rem">— ${rateBadge(wRate)}</span>
+                    ${expBtns(`exportPersPDF('${mois}',${wi})`, `exportPersXls('${mois}',${wi})`)}
+                    <span class="section-chevron" id="chev-${wId}">▼</span>
+                </span>
             </div><div class="section-body collapsed" id="${wId}">`;
 
             w.days.forEach((day, di) => {
                 const dayId = `pers-d-${mois}-${wi}-${di}`;
                 html += `<div class="subsection-title" onclick="toggleSection('${dayId}')" style="margin-top:3px;margin-left:28px;font-size:.74rem;background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
                     <span class="sec-icon">📋</span> ${day.jour}
-                    <span style="margin-left:auto;font-size:.72rem">— ${rateBadge(day.taux)}</span>
-                    ${expBtns(`exportPersPDF('${mois}',${wi},${di})`, `exportPersXls('${mois}',${wi},${di})`)}
-                    <span class="section-chevron" id="chev-${dayId}">▼</span>
+                    <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+                        <span style="font-size:.72rem">— ${rateBadge(day.taux)}</span>
+                        ${expBtns(`exportPersPDF('${mois}',${wi},${di})`, `exportPersXls('${mois}',${wi},${di})`)}
+                        <span class="section-chevron" id="chev-${dayId}">▼</span>
+                    </span>
                 </div><div class="section-body collapsed" id="${dayId}" style="margin-left:28px">
                     <table class="pres-table"><thead><tr><th>Agent</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>H. Supp</th></tr></thead><tbody>`;
                 day.agents.forEach(a => {
@@ -556,7 +568,7 @@ function _apprRows(ci, coi, si) {
         const courses = (coi !== undefined) ? [cl.cours[coi]] : cl.cours;
         courses.forEach(co => {
             const slots = (si !== undefined) ? [co.slots[si]] : co.slots;
-            slots.forEach(s => { rows.push([cl.classe, co.cours, s.date, s.debut, s.fin, s.presents, s.attendus, s.taux + '%']); });
+            slots.forEach(s => { rows.push([cl.classe, co.cours, s.date, s.debut, s.fin, s.presents, s.attendus - s.presents, s.attendus, s.taux + '%']); });
         });
     });
     return rows;
@@ -597,7 +609,7 @@ function exportApprPDF(ci, coi, si) {
     else if (ci !== undefined) label = _apprData[ci].classe;
     else label = 'Toutes classes';
     const { doc, now } = _pdfDoc('Présences Apprenants — ' + label);
-    doc.autoTable({ startY: 25, head: [['Classe','Cours','Date','Début','Fin','Présents','Attendus','Taux']], body: rows, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [99,102,241] } });
+    doc.autoTable({ startY: 25, head: [['Classe','Cours','Date','Début','Fin','Présents','Absents','Attendus','Taux']], body: rows, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [99,102,241] } });
     doc.save('Apprenants_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf');
 }
 function exportApprXls(ci, coi, si) {
@@ -609,8 +621,8 @@ function exportApprXls(ci, coi, si) {
     else if (ci !== undefined) label = _apprData[ci].classe;
     else label = 'Toutes classes';
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([['Classe','Cours','Date','Début','Fin','Présents','Attendus','Taux (%)'], ...rows]);
-    ws['!cols'] = [{wch:25},{wch:30},{wch:12},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8}];
+    const ws = XLSX.utils.aoa_to_sheet([['Classe','Cours','Date','Début','Fin','Présents','Absents','Attendus','Taux (%)'], ...rows]);
+    ws['!cols'] = [{wch:25},{wch:30},{wch:12},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8}];
     XLSX.utils.book_append_sheet(wb, ws, 'Apprenants');
     XLSX.writeFile(wb, 'Apprenants_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.xlsx');
 }
@@ -662,7 +674,7 @@ async function exportGlobalPDF() {
     const apprRows = _apprRows();
     const { doc, now } = _pdfDoc('Rapport Complet de Présences');
     if (apprRows.length) {
-        doc.autoTable({ startY: 25, head: [['Classe','Cours','Date','Début','Fin','Présents','Attendus','Taux']], body: apprRows, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [99,102,241] } });
+        doc.autoTable({ startY: 25, head: [['Classe','Cours','Date','Début','Fin','Présents','Absents','Attendus','Taux']], body: apprRows, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [99,102,241] } });
     }
     // Personnel from all loaded months
     const allPersRows = [];
@@ -686,8 +698,8 @@ async function exportGlobalExcel() {
     const wb = XLSX.utils.book_new();
     const apprRows = _apprRows();
     if (apprRows.length) {
-        const ws = XLSX.utils.aoa_to_sheet([['Classe','Cours','Date','Début','Fin','Présents','Attendus','Taux (%)'], ...apprRows]);
-        ws['!cols'] = [{wch:25},{wch:30},{wch:12},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8}];
+        const ws = XLSX.utils.aoa_to_sheet([['Classe','Cours','Date','Début','Fin','Présents','Absents','Attendus','Taux (%)'], ...apprRows]);
+        ws['!cols'] = [{wch:25},{wch:30},{wch:12},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8}];
         XLSX.utils.book_append_sheet(wb, ws, 'Apprenants');
     }
     const allPersRows = [];
