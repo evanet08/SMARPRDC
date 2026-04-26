@@ -21,6 +21,7 @@ urlpatterns = [
     # ── Présences Apprenants ──────────────────────────────────────────────
     path('stats/presence/apprenants/cours', views.presence_apprenants_cours, name='stats-presence-appr-cours'),
     path('stats/presence/apprenants/classe', views.presence_apprenants_classe, name='stats-presence-appr-classe'),
+    path('stats/presence/apprenants/nested', views.presence_apprenants_nested, name='stats-presence-appr-nested'),
 
     # ── Présences Personnel ──────────────────────────────────────────────
     path('stats/presence/personnel/summary', views.presence_personnel_summary, name='stats-presence-pers-summary'),

@@ -189,6 +189,45 @@ def presence_apprenants_classe(request):
     return Response(_run_stats_query(sql))
 
 
+@api_view(['GET'])
+def presence_apprenants_nested(request):
+    """Présences groupées par classe puis par cours (pour accordéons imbriqués)."""
+    sql = """
+        SELECT
+            CASE
+                WHEN h.groupe IS NULL OR h.groupe = ''
+                THEN CONCAT(IFNULL(cl.Classe,'N/A'),' ',IFNULL(d.depSigle,'N/A'))
+                ELSE CONCAT(IFNULL(cl.Classe,'N/A'),' ',h.groupe,' ',IFNULL(d.depSigle,'N/A'))
+            END AS classe_label,
+            IFNULL(co.cours,'N/A') AS cours_label,
+            COUNT(*) AS value
+        FROM horaire_presence hp
+        JOIN horaire h ON hp.id_horaire = h.id_horaire
+        JOIN classe cl ON cl.id_classe = h.id_classe
+        LEFT JOIN departement d ON d.id_departement = h.id_departement
+        JOIN cours co ON h.id_cours = co.id_cours AND co.id_annee = h.id_annee
+        WHERE h.id_annee = 5 AND hp.absent = 0
+        GROUP BY cl.Classe, h.groupe, d.depSigle, co.cours
+        ORDER BY classe_label, value DESC
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(sql)
+        rows = _dictfetchall(cursor)
+
+    # Group by classe
+    result = {}
+    for r in rows:
+        cl = r['classe_label']
+        if cl not in result:
+            result[cl] = {'classe': cl, 'total': 0, 'cours': []}
+        result[cl]['cours'].append({'label': r['cours_label'], 'value': r['value']})
+        result[cl]['total'] += r['value']
+
+    # Sort classes by total desc
+    data = sorted(result.values(), key=lambda x: -x['total'])
+    return Response(data)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  PRESENCE PERSONNEL (isAdministratif=1, en_fonction=1)
 # ═══════════════════════════════════════════════════════════════════════════════

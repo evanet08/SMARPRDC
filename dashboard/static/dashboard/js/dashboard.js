@@ -19,10 +19,6 @@ const CHARTS_CONFIG = [
     // ── Personnel ────────────────────────────────────────────────────────
     { id:'chart-pers-genre',     endpoint:'/stats/personnel/genre',      title:'Répartition par Genre',     icon:'♂♀', type:'pie', colors:['#3b82f6','#ec4899','#94a3b8','#64748b','#a78bfa'], section:'personnel' },
     { id:'chart-pers-grade',     endpoint:'/stats/personnel/grade',      title:'Par Grade',                 icon:'🏅', type:'bar', colors:['#f43f5e','#fb7185','#f59e0b','#fbbf24','#ef4444','#dc2626','#b91c1c','#e11d48','#fda4af','#fecdd3'], section:'personnel' },
-
-    // ── Présences Apprenants ─────────────────────────────────────────────
-    { id:'chart-pres-appr-classe', endpoint:'/stats/presence/apprenants/classe', title:'Présences par Classe', icon:'📚', type:'bar', colors:['#0ea5e9','#06b6d4','#14b8a6','#10b981','#22c55e','#84cc16','#eab308','#f97316','#ef4444','#ec4899'], section:'presence' },
-    { id:'chart-pres-appr-cours',  endpoint:'/stats/presence/apprenants/cours',  title:'Présences par Cours',  icon:'📖', type:'hbar', colors:['#8b5cf6','#a78bfa','#6366f1','#818cf8','#3b82f6','#0ea5e9','#06b6d4','#14b8a6','#10b981','#22c55e'], section:'presence' },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -281,8 +277,67 @@ function heroCard(colorClass, label, value, subtitle, iconEmoji, extras) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  PERSONNEL PRESENCE TABLE
+//  NESTED PRESENCE APPRENANTS
 // ═══════════════════════════════════════════════════════════════════════════════
+
+const NESTED_COLORS = ['#0ea5e9','#06b6d4','#14b8a6','#10b981','#22c55e','#84cc16','#eab308','#f97316','#ef4444','#ec4899','#8b5cf6','#6366f1','#3b82f6'];
+
+async function loadNestedPresence() {
+    const container = document.getElementById('nested-pres-apprenants');
+    if (!container) return;
+    try {
+        const res = await fetch('/stats/presence/apprenants/nested');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data.length) { container.innerHTML = '<div class="chart-error"><span class="chart-error-text">Aucune donnée</span></div>'; return; }
+
+        let html = '';
+        data.forEach((cl, ci) => {
+            const clId = 'nested-cl-' + ci;
+            html += `<div class="subsection-title" onclick="toggleSection('${clId}')" style="margin-top:8px">
+                <span class="sec-icon">📚</span> ${cl.classe} <span style="margin-left:auto;font-size:.72rem;opacity:.7">${fmt(cl.total)} présences</span>
+                <span class="section-chevron" id="chev-${clId}">▼</span>
+            </div>
+            <div class="section-body collapsed" id="${clId}">`;
+
+            cl.cours.forEach((co, coi) => {
+                const chartId = `nested-chart-${ci}-${coi}`;
+                html += `<div class="chart-card" style="margin:8px 0"><h3><span class="card-icon">📖</span> ${co.label} <span class="card-badge">${fmt(co.value)}</span></h3><div class="chart-wrap" id="wrap-${chartId}"></div></div>`;
+            });
+            html += '</div>';
+        });
+        container.innerHTML = html;
+
+        // Render horizontal bar charts for each course inside each class
+        data.forEach((cl, ci) => {
+            cl.cours.forEach((co, coi) => {
+                const chartId = `nested-chart-${ci}-${coi}`;
+                const wrap = document.getElementById('wrap-' + chartId);
+                if (!wrap) return;
+                wrap.innerHTML = `<div id="apex-${chartId}"></div>`;
+                const maxVal = cl.cours[0].value;
+                const chart = new ApexCharts(document.querySelector(`#apex-${chartId}`), {
+                    chart: { type: 'bar', height: 60, toolbar: { show: false }, sparkline: { enabled: false } },
+                    series: [{ data: [co.value] }],
+                    colors: [NESTED_COLORS[coi % NESTED_COLORS.length]],
+                    plotOptions: { bar: { horizontal: true, borderRadius: 3, barHeight: '70%' } },
+                    xaxis: { max: maxVal, labels: { show: false } },
+                    yaxis: { labels: { show: false } },
+                    dataLabels: { enabled: true, formatter: () => fmt(co.value) + ' (' + (cl.total ? ((co.value/cl.total)*100).toFixed(1) : 0) + '%)', style: { fontSize: '11px', fontWeight: 700, fontFamily: 'Inter' } },
+                    legend: { show: false },
+                    grid: { show: false, padding: { top: -15, bottom: -10, left: 0, right: 0 } },
+                    tooltip: { enabled: false }
+                });
+                chart.render();
+                apexInstances.push(chart);
+            });
+        });
+    } catch(e) {
+        console.error('[SMARPRDC] Nested presence:', e);
+        container.innerHTML = '<div class="chart-error"><span class="chart-error-text">Erreur de chargement</span></div>';
+    }
+}
+
 
 const MOIS_FR = {1:'Janvier',2:'Février',3:'Mars',4:'Avril',5:'Mai',6:'Juin',7:'Juillet',8:'Août',9:'Septembre',10:'Octobre',11:'Novembre',12:'Décembre'};
 
@@ -350,6 +405,7 @@ async function initDashboard() {
 
     const results = await Promise.all(CHARTS_CONFIG.map(loadChart));
     loadPresencePersonnel();
+    loadNestedPresence();
 
     let totalApprenants = 0, totalPersonnel = 0;
     results.forEach(r => {
