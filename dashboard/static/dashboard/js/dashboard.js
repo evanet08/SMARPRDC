@@ -22,7 +22,7 @@ const CHARTS_CONFIG = [
 
     // ── Présences Apprenants ─────────────────────────────────────────────
     { id:'chart-pres-appr-classe', endpoint:'/stats/presence/apprenants/classe', title:'Présences par Classe', icon:'📚', type:'bar', colors:['#0ea5e9','#06b6d4','#14b8a6','#10b981','#22c55e','#84cc16','#eab308','#f97316','#ef4444','#ec4899'], section:'presence' },
-    { id:'chart-pres-appr-cours',  endpoint:'/stats/presence/apprenants/cours',  title:'Présences par Cours',  icon:'📖', type:'bar', colors:['#8b5cf6','#a78bfa','#6366f1','#818cf8','#3b82f6','#0ea5e9','#06b6d4','#14b8a6','#10b981','#22c55e'], section:'presence' },
+    { id:'chart-pres-appr-cours',  endpoint:'/stats/presence/apprenants/cours',  title:'Présences par Cours',  icon:'📖', type:'hbar', colors:['#8b5cf6','#a78bfa','#6366f1','#818cf8','#3b82f6','#0ea5e9','#06b6d4','#14b8a6','#10b981','#22c55e'], section:'presence' },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -113,48 +113,53 @@ function renderBarChart(containerId, data, colors) {
     const total = data.reduce((s, d) => s + d.value, 0);
     wrap.innerHTML = `<div id="apex-${containerId}"></div>`;
 
-    // Update badge
     const badge = document.querySelector(`#${containerId} .card-badge`);
     if (badge) badge.textContent = fmt(total);
 
+    const pctData = data.map(d => total ? +((d.value / total) * 100).toFixed(1) : 0);
+
     const chart = new ApexCharts(document.querySelector(`#apex-${containerId}`), {
         chart: { type: 'bar', height: Math.max(280, data.length * 28), toolbar: { show: false } },
-        series: [{ data: data.map(d => d.value) }],
+        series: [{ data: pctData }],
         colors: colors,
-        plotOptions: {
-            bar: {
-                horizontal: false,
-                borderRadius: 4,
-                columnWidth: '55%',
-                distributed: true
-            }
-        },
+        plotOptions: { bar: { horizontal: false, borderRadius: 4, columnWidth: '55%', distributed: true } },
         xaxis: {
             categories: data.map(d => d.label),
-            labels: {
-                style: { fontSize: '10px', fontWeight: 600, fontFamily: 'Inter' },
-                rotate: -45,
-                rotateAlways: data.length > 5,
-                trim: true,
-                maxHeight: 100
-            }
+            labels: { style: { fontSize: '10px', fontWeight: 600, fontFamily: 'Inter' }, rotate: -45, rotateAlways: data.length > 5, trim: true, maxHeight: 100 }
         },
-        yaxis: {
-            labels: {
-                style: { fontSize: '11px', fontWeight: 500, fontFamily: 'Inter' }
-            }
-        },
-        dataLabels: {
-            enabled: true,
-            formatter: v => fmt(v),
-            style: { fontSize: '10px', fontWeight: 700, fontFamily: 'Inter' },
-            offsetY: -4
-        },
+        yaxis: { max: 100, labels: { style: { fontSize: '11px', fontWeight: 500, fontFamily: 'Inter' }, formatter: v => v + '%' } },
+        dataLabels: { enabled: true, formatter: v => v + '%', style: { fontSize: '10px', fontWeight: 700, fontFamily: 'Inter' }, offsetY: -4 },
         legend: { show: false },
         grid: { borderColor: '#e5e7eb', yaxis: { lines: { show: true } }, xaxis: { lines: { show: false } } },
-        tooltip: {
-            y: { formatter: v => fmt(v) + ' (' + ((v / total) * 100).toFixed(1) + '%)' }
-        }
+        tooltip: { y: { formatter: (v, { dataPointIndex: i }) => v + '% (' + fmt(data[i].value) + ')' } }
+    });
+    chart.render();
+    apexInstances.push(chart);
+}
+
+function renderHBarChart(containerId, data, colors) {
+    const wrap = document.querySelector(`#${containerId} .chart-wrap`);
+    if (!wrap) return;
+
+    const total = data.reduce((s, d) => s + d.value, 0);
+    wrap.innerHTML = `<div id="apex-${containerId}"></div>`;
+
+    const badge = document.querySelector(`#${containerId} .card-badge`);
+    if (badge) badge.textContent = fmt(total);
+
+    const pctData = data.map(d => total ? +((d.value / total) * 100).toFixed(1) : 0);
+
+    const chart = new ApexCharts(document.querySelector(`#apex-${containerId}`), {
+        chart: { type: 'bar', height: Math.max(400, data.length * 30), toolbar: { show: false } },
+        series: [{ data: pctData }],
+        colors: colors,
+        plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '60%', distributed: true } },
+        yaxis: { categories: data.map(d => d.label), labels: { style: { fontSize: '10px', fontWeight: 600, fontFamily: 'Inter' }, maxWidth: 250 } },
+        xaxis: { max: Math.ceil(Math.max(...pctData) + 2), labels: { formatter: v => v + '%', style: { fontSize: '10px', fontFamily: 'Inter' } } },
+        dataLabels: { enabled: true, formatter: v => v + '%', style: { fontSize: '10px', fontWeight: 700, fontFamily: 'Inter' } },
+        legend: { show: false },
+        grid: { borderColor: '#e5e7eb' },
+        tooltip: { y: { formatter: (v, { dataPointIndex: i }) => v + '% (' + fmt(data[i].value) + ')' } }
     });
     chart.render();
     apexInstances.push(chart);
@@ -223,6 +228,8 @@ async function loadChart(config) {
             renderPieChart(config.id, data, config.colors);
         } else if (config.type === 'grid') {
             renderGrid(config.id, data);
+        } else if (config.type === 'hbar') {
+            renderHBarChart(config.id, data, config.colors);
         } else {
             renderBarChart(config.id, data, config.colors);
         }
