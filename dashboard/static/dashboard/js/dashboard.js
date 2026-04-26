@@ -584,7 +584,7 @@ function _persRows(mois, wi, di) {
     const rows = [];
     days.forEach(day => {
         day.agents.forEach(a => {
-            rows.push([a.agent, day.jour, a.present ? 'Oui' : 'Non', a.heures_sup || '']);
+            rows.push([a.agent, day.jour, a.arrivee || '—', a.depart || '—', a.present ? 'Oui' : 'Non', a.heures_sup || '']);
         });
     });
     return rows;
@@ -635,7 +635,7 @@ function exportPersPDF(mois, wi, di) {
     if (di !== undefined) label = _persData[mois].weeks[wi].days[di].jour;
     else if (wi !== undefined) label = _persData[mois].weeks[wi].label;
     const { doc } = _pdfDoc('Présences Personnel — ' + label);
-    doc.autoTable({ startY: 25, head: [['Agent','Date','Présence','Heures supp']], body: rows, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [16,185,129] } });
+    doc.autoTable({ startY: 25, head: [['Agent','Date','Arrivée','Départ','Présence','Heures supp']], body: rows, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [16,185,129] } });
     doc.save('Personnel_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf');
 }
 function exportPersXls(mois, wi, di) {
@@ -645,8 +645,8 @@ function exportPersXls(mois, wi, di) {
     if (di !== undefined) label = _persData[mois].weeks[wi].days[di].jour;
     else if (wi !== undefined) label = _persData[mois].weeks[wi].label;
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([['Agent','Date','Présence','Heures supp'], ...rows]);
-    ws['!cols'] = [{wch:35},{wch:12},{wch:10},{wch:12}];
+    const ws = XLSX.utils.aoa_to_sheet([['Agent','Date','Arrivée','Départ','Présence','Heures supp'], ...rows]);
+    ws['!cols'] = [{wch:35},{wch:12},{wch:10},{wch:10},{wch:10},{wch:12}];
     XLSX.utils.book_append_sheet(wb, ws, 'Personnel');
     XLSX.writeFile(wb, 'Personnel_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.xlsx');
 }
@@ -682,7 +682,7 @@ async function exportGlobalPDF() {
     if (allPersRows.length) {
         doc.addPage();
         doc.setFontSize(12); doc.text('Présences Personnel', 14, 15);
-        doc.autoTable({ startY: 20, head: [['Agent','Date','Présence','Heures supp']], body: allPersRows, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [16,185,129] } });
+        doc.autoTable({ startY: 20, head: [['Agent','Date','Arrivée','Départ','Présence','Heures supp']], body: allPersRows, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [16,185,129] } });
     }
     // Cumuls
     const tbl = document.querySelector('#pres-personnel-cumuls table');
@@ -705,8 +705,8 @@ async function exportGlobalExcel() {
     const allPersRows = [];
     Object.keys(_persData).forEach(m => { allPersRows.push(..._persRows(m)); });
     if (allPersRows.length) {
-        const ws = XLSX.utils.aoa_to_sheet([['Agent','Date','Présence','Heures supp'], ...allPersRows]);
-        ws['!cols'] = [{wch:35},{wch:12},{wch:10},{wch:12}];
+        const ws = XLSX.utils.aoa_to_sheet([['Agent','Date','Arrivée','Départ','Présence','Heures supp'], ...allPersRows]);
+        ws['!cols'] = [{wch:35},{wch:12},{wch:10},{wch:10},{wch:10},{wch:12}];
         XLSX.utils.book_append_sheet(wb, ws, 'Personnel');
     }
     const tbl = document.querySelector('#pres-personnel-cumuls table');
@@ -739,12 +739,26 @@ async function initDashboard() {
 
     const totalGeneral = totalApprenants + totalPersonnel;
 
+    // Fetch gender breakdowns for hero cards
+    let apprGender = {F: 0, M: 0}, persGender = {F: 0, M: 0};
+    try {
+        const [apprG, persG] = await Promise.all([
+            fetch('/stats/apprenants/genre').then(r => r.json()),
+            fetch('/stats/personnel/genre').then(r => r.json())
+        ]);
+        apprG.forEach(g => { const k = (g.label || '').toUpperCase().trim(); if (k === 'F') apprGender.F = g.value; else if (k === 'M') apprGender.M = g.value; });
+        persG.forEach(g => { const k = (g.label || '').toUpperCase().trim(); if (k === 'F') persGender.F = g.value; else if (k === 'M') persGender.M = g.value; });
+    } catch(e) { console.warn('Gender fetch:', e); }
+
     const heroContainer = document.getElementById('hero-summary');
     if (heroContainer) {
         heroContainer.innerHTML =
-            heroCard('c1', 'Apprenants Inscrits', fmt(totalApprenants), 'Année académique en cours', '🎓') +
-            heroCard('c2', 'Personnel Actif',     fmt(totalPersonnel),  'Administratif en fonction', '👥') +
-            heroCard('c8', 'Effectif Total',      fmt(totalGeneral),    'Apprenants + Personnel',    '📊');
+            heroCard('c1', 'Apprenants Inscrits', fmt(totalApprenants), 'Année académique en cours', '🎓',
+                [`F: ${fmt(apprGender.F)}`, `M: ${fmt(apprGender.M)}`]) +
+            heroCard('c2', 'Personnel Actif', fmt(totalPersonnel), 'Administratif en fonction', '👥',
+                [`F: ${fmt(persGender.F)}`, `M: ${fmt(persGender.M)}`]) +
+            heroCard('c8', 'Effectif Total', fmt(totalGeneral), 'Apprenants + Personnel', '📊',
+                [`F: ${fmt(apprGender.F + persGender.F)}`, `M: ${fmt(apprGender.M + persGender.M)}`]);
     }
 
     const loader = document.getElementById('main-loader');
