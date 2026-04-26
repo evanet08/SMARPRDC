@@ -169,12 +169,28 @@ function renderGrid(containerId, data) {
     // Sort by value descending
     const sorted = [...data].sort((a, b) => b.value - a.value);
 
-    wrap.innerHTML = `<div class="stat-grid">${sorted.map(d => `
-        <div class="stat-grid-item">
-            <div class="stat-grid-value">${fmt(d.value)}</div>
-            <div class="stat-grid-label">${d.label || 'N/A'}</div>
-        </div>`).join('')}
-    </div>`;
+    // Color palette
+    const palette = [
+        '#6366f1','#8b5cf6','#06b6d4','#10b981','#f59e0b',
+        '#ef4444','#ec4899','#0ea5e9','#14b8a6','#f97316',
+        '#7c3aed','#0d9488','#d946ef','#3b82f6','#84cc16',
+        '#e11d48','#0284c7','#059669','#dc2626','#4f46e5'
+    ];
+
+    // Compute proportional flex-grow: min 1, scaled by percentage
+    const maxVal = sorted.length ? sorted[0].value : 1;
+
+    wrap.innerHTML = `<div class="stat-flex">${sorted.map((d, i) => {
+        const pct = total ? (d.value / total * 100) : 0;
+        // Min width ~80px, grow proportionally
+        const grow = Math.max(1, Math.round((d.value / maxVal) * 6));
+        const bg = palette[i % palette.length];
+        return `<div class="stat-flex-item" style="flex-grow:${grow};background:${bg}">
+            <div class="stat-flex-label">${d.label || 'N/A'}</div>
+            <div class="stat-flex-value">${fmt(d.value)}</div>
+            <div class="stat-flex-pct">${pct.toFixed(1)}%</div>
+        </div>`;
+    }).join('')}</div>`;
 }
 
 
