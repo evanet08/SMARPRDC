@@ -374,8 +374,8 @@ body {
 }
 
 .stat-flex-item {
-    flex-basis: 80px;
-    min-width: 80px;
+    flex-basis: 120px;
+    min-width: 120px;
     border-radius: var(--radius-sm);
     padding: 12px 14px;
     text-align: center;
