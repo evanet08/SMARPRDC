@@ -418,16 +418,6 @@ async function loadMonthWeeks(mois) {
         const monthStats = document.getElementById('month-stats-' + mois);
         if (monthStats) monthStats.innerHTML = '— ' + rateBadge(mRate);
 
-        // Aggregate per agent across month
-        const agentMap = {};
-        days.forEach(day => {
-            day.agents.forEach(a => {
-                if (!agentMap[a.agent]) agentMap[a.agent] = { days: 0, overtime_s: 0 };
-                if (a.present) agentMap[a.agent].days++;
-                agentMap[a.agent].overtime_s += (a.overtime_s || 0);
-            });
-        });
-
         let html = '';
         const sortedWeeks = Object.entries(weeks).sort((a, b) => a[0].localeCompare(b[0]));
         sortedWeeks.forEach(([wKey, w], wi) => {
@@ -446,10 +436,10 @@ async function loadMonthWeeks(mois) {
                     <span style="margin-left:auto;font-size:.72rem">— ${rateBadge(day.taux)}</span>
                     <span class="section-chevron" id="chev-${dayId}">▼</span>
                 </div><div class="section-body collapsed" id="${dayId}" style="margin-left:28px">
-                    <table class="pres-table"><thead><tr><th>Agent</th><th>Présences</th><th>H. Supp cumulées</th></tr></thead><tbody>`;
+                    <table class="pres-table"><thead><tr><th>Agent</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>H. Supp</th></tr></thead><tbody>`;
                 day.agents.forEach(a => {
-                    const ag = agentMap[a.agent] || { days: 0, overtime_s: 0 };
-                    html += `<tr><td>${a.agent}</td><td style="font-weight:600">${ag.days} jour${ag.days > 1 ? 's' : ''}</td><td style="font-weight:600">${fmtOT(ag.overtime_s)}</td></tr>`;
+                    const b = a.present ? '<span style="color:#10b981;font-weight:700">✓ Oui</span>' : '<span style="color:#ef4444;font-weight:700">✗ Non</span>';
+                    html += `<tr><td>${a.agent}</td><td>${a.arrivee}</td><td>${a.depart}</td><td>${b}</td><td>${a.heures_sup || '—'}</td></tr>`;
                 });
                 html += '</tbody></table></div>';
             });
@@ -458,6 +448,65 @@ async function loadMonthWeeks(mois) {
         container.innerHTML = html;
     } catch(e) {
         console.error('[SMARPRDC] Month detail:', e);
+        container.innerHTML = '<span style="color:#ef4444">Erreur de chargement</span>';
+    }
+}
+
+// ── Cumuls Heures Supplémentaires (independent summary) ─────────────────────
+
+let _cumulLoaded = false;
+async function loadPersonnelCumuls() {
+    if (_cumulLoaded) return;
+    _cumulLoaded = true;
+    const container = document.getElementById('pres-personnel-cumuls');
+    if (!container) return;
+    try {
+        const sumRes = await fetch('/stats/presence/personnel/summary');
+        const months = await sumRes.json();
+        if (!months.length) { container.innerHTML = '<div class="chart-error"><span class="chart-error-text">Aucune donnée</span></div>'; return; }
+
+        // Fetch all months in parallel
+        const allData = await Promise.all(months.map(m =>
+            fetch('/stats/presence/personnel/detail?mois=' + m.mois).then(r => r.json())
+        ));
+
+        // Aggregate per agent across ALL months
+        const agentMap = {};
+        let totalExpected = 0, totalPresent = 0, totalDays = 0;
+        allData.forEach(raw => {
+            const expected = raw.total_expected;
+            raw.days.forEach(day => {
+                totalDays++;
+                totalPresent += day.presents;
+                totalExpected += day.attendus;
+                day.agents.forEach(a => {
+                    if (!agentMap[a.agent]) agentMap[a.agent] = { present: 0, absent: 0, expected: 0, overtime_s: 0 };
+                    agentMap[a.agent].expected += 1;
+                    if (a.present) agentMap[a.agent].present++;
+                    else agentMap[a.agent].absent++;
+                    agentMap[a.agent].overtime_s += (a.overtime_s || 0);
+                });
+            });
+        });
+
+        // Sort by overtime desc
+        const sorted = Object.entries(agentMap).sort((a, b) => b[1].overtime_s - a[1].overtime_s);
+
+        let html = `<div style="padding:8px 0;font-size:.72rem;opacity:.7">Période: ${months.length} mois — ${totalDays} jours travaillés — Taux global: ${rateBadge(totalExpected ? ((totalPresent/totalExpected)*100).toFixed(1) : 0)}</div>`;
+        html += '<table class="pres-table"><thead><tr><th>Agent</th><th>Présences</th><th>Absences</th><th>Total attendu</th><th>H. Supp cumulées</th></tr></thead><tbody>';
+        sorted.forEach(([name, ag]) => {
+            html += `<tr>
+                <td>${name}</td>
+                <td style="font-weight:600;color:#10b981">${ag.present} jour${ag.present > 1 ? 's' : ''}</td>
+                <td style="font-weight:600;color:#ef4444">${ag.absent} jour${ag.absent > 1 ? 's' : ''}</td>
+                <td>${ag.expected} jour${ag.expected > 1 ? 's' : ''}</td>
+                <td style="font-weight:700">${fmtOT(ag.overtime_s)}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    } catch(e) {
+        console.error('[SMARPRDC] Cumuls:', e);
         container.innerHTML = '<span style="color:#ef4444">Erreur de chargement</span>';
     }
 }

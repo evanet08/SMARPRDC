@@ -173,8 +173,25 @@
                     <span class="section-chevron" id="chev-sub-pres-pers">▼</span>
                 </div>
                 <div class="section-body" id="sub-pres-pers">
-                    <div id="pres-personnel-wrap">
-                        <div class="chart-loading"><div class="spinner"></div><span class="chart-loading-text">Chargement…</span></div>
+                    <!-- Detailed accordion -->
+                    <div class="subsection-title" onclick="toggleSection('sub-pers-detail')" style="margin-top:6px">
+                        <span class="sec-icon">📋</span> Détails par Mois / Semaine / Jour
+                        <span class="section-chevron" id="chev-sub-pers-detail">▼</span>
+                    </div>
+                    <div class="section-body collapsed" id="sub-pers-detail">
+                        <div id="pres-personnel-wrap">
+                            <div class="chart-loading"><div class="spinner"></div><span class="chart-loading-text">Chargement…</span></div>
+                        </div>
+                    </div>
+                    <!-- Cumuls summary -->
+                    <div class="subsection-title" onclick="toggleSection('sub-pers-cumuls');loadPersonnelCumuls()" style="margin-top:6px">
+                        <span class="sec-icon">📊</span> Cumuls Heures Supplémentaires
+                        <span class="section-chevron" id="chev-sub-pers-cumuls">▼</span>
+                    </div>
+                    <div class="section-body collapsed" id="sub-pers-cumuls">
+                        <div id="pres-personnel-cumuls">
+                            <div class="chart-loading"><div class="spinner"></div><span class="chart-loading-text">Chargement…</span></div>
+                        </div>
                     </div>
                 </div>
             </div>
