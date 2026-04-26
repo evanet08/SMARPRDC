@@ -13,7 +13,7 @@ const CHARTS_CONFIG = [
     { id:'chart-appr-genre',     endpoint:'/stats/apprenants/genre',     title:'Répartition par Genre',     icon:'♂♀', type:'pie', colors:['#3b82f6','#ec4899','#94a3b8','#64748b','#a78bfa'], section:'apprenants' },
     { id:'chart-appr-promotion', endpoint:'/stats/apprenants/promotion', title:'Par Promotion',             icon:'📚', type:'bar', colors:['#6366f1','#818cf8','#a5b4fc','#c7d2fe','#4f46e5','#7c3aed','#4338ca','#312e81','#e0e7ff','#93c5fd'], section:'apprenants' },
     { id:'chart-appr-province',  endpoint:'/stats/apprenants/province',  title:'Par Province',              icon:'🗺️', type:'bar', colors:['#06b6d4','#0ea5e9','#38bdf8','#7dd3fc','#0284c7','#0369a1','#075985','#164e63','#22d3ee','#67e8f9'], section:'apprenants' },
-    { id:'chart-appr-service',   endpoint:'/stats/apprenants/service',   title:'Par Service',               icon:'🏢', type:'bar', colors:['#10b981','#34d399','#6ee7b7','#059669','#047857','#14b8a6','#2dd4bf','#0f766e','#a7f3d0','#d1fae5'], section:'apprenants' },
+    { id:'chart-appr-service',   endpoint:'/stats/apprenants/service',   title:'Par Service',               icon:'🏢', type:'grid', colors:['#10b981','#34d399','#6ee7b7','#059669','#047857','#14b8a6','#2dd4bf','#0f766e','#a7f3d0','#d1fae5'], section:'apprenants' },
     { id:'chart-appr-grade',     endpoint:'/stats/apprenants/grade',     title:'Par Grade Académique',      icon:'🎓', type:'bar', colors:['#8b5cf6','#a78bfa','#c4b5fd','#7c3aed','#6d28d9','#5b21b6','#a855f7','#ddd6fe','#ede9fe','#4c1d95'], section:'apprenants' },
 
     // ── Personnel ────────────────────────────────────────────────────────
@@ -156,6 +156,26 @@ function renderBarChart(containerId, data, colors) {
     apexInstances.push(chart);
 }
 
+function renderGrid(containerId, data) {
+    const wrap = document.querySelector(`#${containerId} .chart-wrap`);
+    if (!wrap) return;
+
+    const total = data.reduce((s, d) => s + d.value, 0);
+
+    // Update badge
+    const badge = document.querySelector(`#${containerId} .card-badge`);
+    if (badge) badge.textContent = fmt(total);
+
+    // Sort by value descending
+    const sorted = [...data].sort((a, b) => b.value - a.value);
+
+    wrap.innerHTML = `<div class="stat-grid">${sorted.map(d => `
+        <div class="stat-grid-item">
+            <div class="stat-grid-value">${fmt(d.value)}</div>
+            <div class="stat-grid-label">${d.label || 'N/A'}</div>
+        </div>`).join('')}
+    </div>`;
+}
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -176,6 +196,8 @@ async function loadChart(config) {
 
         if (config.type === 'pie') {
             renderPieChart(config.id, data, config.colors);
+        } else if (config.type === 'grid') {
+            renderGrid(config.id, data);
         } else {
             renderBarChart(config.id, data, config.colors);
         }

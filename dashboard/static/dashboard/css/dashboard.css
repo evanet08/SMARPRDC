@@ -365,6 +365,50 @@ body {
 .chart-error-icon { font-size: 28px; }
 .chart-error-text { font-size: .78rem; font-weight: 500; }
 
+/* ── Stat Grid (Service cards) ────────────────────────────────────────────── */
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+    padding: 4px 0;
+}
+
+.stat-grid-item {
+    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    padding: 14px 10px;
+    text-align: center;
+    transition: transform var(--transition), box-shadow var(--transition);
+    cursor: default;
+}
+
+.stat-grid-item:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--border-indigo);
+}
+
+.stat-grid-value {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--accent-indigo);
+    line-height: 1.1;
+}
+
+.stat-grid-label {
+    font-size: .68rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* ── Footer ───────────────────────────────────────────────────────────────── */
 .footer {
     max-width: 1500px;
