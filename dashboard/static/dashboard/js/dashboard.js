@@ -177,12 +177,18 @@ function renderGrid(containerId, data) {
         '#e11d48','#0284c7','#059669','#dc2626','#4f46e5'
     ];
 
-    // Compute proportional width: (value / maxVal) * 350px, clamped [120, 350]
-    const maxVal = sorted.length ? sorted[0].value : 1;
+    // 5 width tiers based on value intervals
+    const tierWidth = (v) => {
+        if (v >= 100) return 350;
+        if (v >= 50)  return 280;
+        if (v >= 10)  return 210;
+        if (v >= 5)   return 160;
+        return 120;
+    };
 
     wrap.innerHTML = `<div class="stat-flex">${sorted.map((d, i) => {
         const pct = total ? (d.value / total * 100) : 0;
-        const w = Math.max(120, Math.min(350, Math.round((d.value / maxVal) * 350)));
+        const w = tierWidth(d.value);
         const bg = palette[i % palette.length];
         return `<div class="stat-flex-item" style="width:${w}px;flex-grow:0;background:${bg}">
             <div class="stat-flex-label">${d.label || 'N/A'}</div>
