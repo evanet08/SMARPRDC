@@ -91,14 +91,13 @@ def apprenants_province(request):
 
 @api_view(['GET'])
 def apprenants_service(request):
-    """Répartition des apprenants par service de provenance."""
+    """Répartition des apprenants par service attaché."""
     sql = """
-        SELECT IFNULL(s.service,'N/A') AS label, COUNT(*) AS value
+        SELECT IFNULL(e.service_attache,'N/A') AS label, COUNT(*) AS value
         FROM etudiant e
         JOIN etudiant_inscription i ON e.id_etudiant = i.id_etudiant
-        LEFT JOIN personnel_service s ON e.id_service = s.id_service
         WHERE i.id_annee = 5
-        GROUP BY s.service
+        GROUP BY e.service_attache
     """
     return Response(_run_stats_query(sql))
 

@@ -278,9 +278,9 @@ body {
     margin-bottom: 18px;
 }
 
-.chart-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.chart-grid-1 { grid-template-columns: 1fr; }
 .chart-grid-2 { grid-template-columns: repeat(2, 1fr); }
-.chart-grid-5 { grid-template-columns: repeat(5, 1fr); }
+.chart-grid-3 { grid-template-columns: repeat(3, 1fr); }
 
 /* ── Chart Card ───────────────────────────────────────────────────────────── */
 .chart-card {
