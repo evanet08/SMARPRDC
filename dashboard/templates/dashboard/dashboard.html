@@ -61,51 +61,32 @@
             <div class="stats-hero" id="hero-summary"></div>
 
             <!-- ═══════════════════════════════════════════════════════════ -->
-            <!--  GENRES EN AVANT (top priority)                            -->
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <div class="section-title section-toggle" onclick="toggleSection('sec-genres')">
-                <span class="sec-icon">♂♀</span> Répartition par Genre
-                <span class="section-chevron" id="chev-sec-genres">▼</span>
-            </div>
-            <div class="section-body" id="sec-genres">
-                <div class="chart-grid chart-grid-2">
-                    <!-- Apprenants Genre -->
-                    <div class="chart-card" id="chart-appr-genre">
-                        <h3>
-                            <span class="card-icon">🎓</span> Genre des Apprenants
-                            <span class="card-badge">—</span>
-                        </h3>
-                        <div class="chart-wrap"></div>
-                    </div>
-                    <!-- Personnel Genre -->
-                    <div class="chart-card" id="chart-pers-genre">
-                        <h3>
-                            <span class="card-icon">👥</span> Genre du Personnel
-                            <span class="card-badge">—</span>
-                        </h3>
-                        <div class="chart-wrap"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <!--  APPRENANTS DETAILS                                        -->
+            <!--  SECTION 1: APPRENANTS                                    -->
             <!-- ═══════════════════════════════════════════════════════════ -->
             <div class="section-title section-toggle" onclick="toggleSection('sec-apprenants')">
                 <span class="sec-icon">🎓</span> Statistiques des Apprenants
                 <span class="section-chevron" id="chev-sec-apprenants">▼</span>
             </div>
             <div class="section-body" id="sec-apprenants">
-                <div class="chart-grid chart-grid-3">
-                    <!-- Promotion -->
-                    <div class="chart-card" id="chart-appr-promotion">
+                <!-- Genre (pie) -->
+                <div class="chart-grid chart-grid-2">
+                    <div class="chart-card" id="chart-appr-genre">
                         <h3>
-                            <span class="card-icon">📚</span> Effectif par Promotion
+                            <span class="card-icon">♂♀</span> Répartition par Genre
                             <span class="card-badge">—</span>
                         </h3>
                         <div class="chart-wrap"></div>
                     </div>
-                    <!-- Province -->
+                </div>
+                <!-- Promotion / Province / Service -->
+                <div class="chart-grid chart-grid-3" style="margin-top:14px">
+                    <div class="chart-card" id="chart-appr-promotion">
+                        <h3>
+                            <span class="card-icon">📚</span> Effectif par Classe
+                            <span class="card-badge">—</span>
+                        </h3>
+                        <div class="chart-wrap"></div>
+                    </div>
                     <div class="chart-card" id="chart-appr-province">
                         <h3>
                             <span class="card-icon">🗺️</span> Province de Provenance
@@ -113,7 +94,6 @@
                         </h3>
                         <div class="chart-wrap"></div>
                     </div>
-                    <!-- Service -->
                     <div class="chart-card" id="chart-appr-service">
                         <h3>
                             <span class="card-icon">🏢</span> Par Service / Département
@@ -122,8 +102,8 @@
                         <div class="chart-wrap"></div>
                     </div>
                 </div>
+                <!-- Grade -->
                 <div class="chart-grid chart-grid-2" style="margin-top:14px">
-                    <!-- Grade -->
                     <div class="chart-card" id="chart-appr-grade">
                         <h3>
                             <span class="card-icon">🎓</span> Par Grade Académique
@@ -135,15 +115,25 @@
             </div>
 
             <!-- ═══════════════════════════════════════════════════════════ -->
-            <!--  PERSONNEL DETAILS                                         -->
+            <!--  SECTION 2: PERSONNEL                                     -->
             <!-- ═══════════════════════════════════════════════════════════ -->
             <div class="section-title section-toggle" onclick="toggleSection('sec-personnel')">
-                <span class="sec-icon">👥</span> Statistiques du Personnel
+                <span class="sec-icon">👥</span> Statistiques des Personnels
                 <span class="section-chevron" id="chev-sec-personnel">▼</span>
             </div>
             <div class="section-body" id="sec-personnel">
+                <!-- Genre (pie) -->
                 <div class="chart-grid chart-grid-2">
-                    <!-- Grade Personnel -->
+                    <div class="chart-card" id="chart-pers-genre">
+                        <h3>
+                            <span class="card-icon">♂♀</span> Répartition par Genre
+                            <span class="card-badge">—</span>
+                        </h3>
+                        <div class="chart-wrap"></div>
+                    </div>
+                </div>
+                <!-- Grade (bar) -->
+                <div class="chart-grid chart-grid-2" style="margin-top:14px">
                     <div class="chart-card" id="chart-pers-grade">
                         <h3>
                             <span class="card-icon">🏅</span> Par Grade

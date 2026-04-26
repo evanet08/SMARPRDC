@@ -57,16 +57,21 @@ def apprenants_genre(request):
 
 @api_view(['GET'])
 def apprenants_promotion(request):
-    """Répartition des apprenants par promotion (Classe + groupe + id_departement)."""
+    """Répartition des apprenants par promotion (Classe + groupe + depSigle)."""
     sql = """
         SELECT
-            CONCAT(IFNULL(c.Classe,'N/A'),' ',IFNULL(i.groupe,'N/A'),' ',IFNULL(i.id_departement,'N/A')) AS label,
+            CASE
+                WHEN i.groupe IS NULL OR i.groupe = ''
+                THEN CONCAT(IFNULL(c.Classe,'N/A'),' ',IFNULL(d.depSigle,'N/A'))
+                ELSE CONCAT(IFNULL(c.Classe,'N/A'),' ',i.groupe,' ',IFNULL(d.depSigle,'N/A'))
+            END AS label,
             COUNT(*) AS value
         FROM etudiant e
         JOIN etudiant_inscription i ON e.id_etudiant = i.id_etudiant
         JOIN classe c ON c.id_classe = i.id_classe
+        LEFT JOIN departement d ON d.id_departement = i.id_departement
         WHERE i.id_annee = 5
-        GROUP BY c.Classe, i.groupe, i.id_departement
+        GROUP BY c.Classe, i.groupe, d.depSigle
     """
     return Response(_run_stats_query(sql))
 
