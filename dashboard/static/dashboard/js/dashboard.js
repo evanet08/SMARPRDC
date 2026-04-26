@@ -277,10 +277,8 @@ function heroCard(colorClass, label, value, subtitle, iconEmoji, extras) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  NESTED PRESENCE APPRENANTS
+//  NESTED PRESENCE APPRENANTS (Class → Course → time-slot table)
 // ═══════════════════════════════════════════════════════════════════════════════
-
-const NESTED_COLORS = ['#0ea5e9','#06b6d4','#14b8a6','#10b981','#22c55e','#84cc16','#eab308','#f97316','#ef4444','#ec4899','#8b5cf6','#6366f1','#3b82f6'];
 
 async function loadNestedPresence() {
     const container = document.getElementById('nested-pres-apprenants');
@@ -290,54 +288,41 @@ async function loadNestedPresence() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!data.length) { container.innerHTML = '<div class="chart-error"><span class="chart-error-text">Aucune donnée</span></div>'; return; }
-
         let html = '';
         data.forEach((cl, ci) => {
             const clId = 'nested-cl-' + ci;
+            const totalSlots = cl.cours.reduce((s, c) => s + c.slots.length, 0);
             html += `<div class="subsection-title" onclick="toggleSection('${clId}')" style="margin-top:8px">
-                <span class="sec-icon">📚</span> ${cl.classe} <span style="margin-left:auto;font-size:.72rem;opacity:.7">${fmt(cl.total)} présences</span>
+                <span class="sec-icon">📚</span> ${cl.classe}
+                <span style="margin-left:auto;font-size:.72rem;opacity:.7">${totalSlots} séances</span>
                 <span class="section-chevron" id="chev-${clId}">▼</span>
-            </div>
-            <div class="section-body collapsed" id="${clId}">`;
-
+            </div><div class="section-body collapsed" id="${clId}">`;
             cl.cours.forEach((co, coi) => {
-                const chartId = `nested-chart-${ci}-${coi}`;
-                html += `<div class="chart-card" style="margin:8px 0"><h3><span class="card-icon">📖</span> ${co.label} <span class="card-badge">${fmt(co.value)}</span></h3><div class="chart-wrap" id="wrap-${chartId}"></div></div>`;
+                const coId = `nested-co-${ci}-${coi}`;
+                html += `<div class="subsection-title" onclick="toggleSection('${coId}')" style="margin-top:4px;margin-left:16px;font-size:.78rem;background:linear-gradient(135deg,#eef2ff,#e0e7ff)">
+                    <span class="sec-icon">📖</span> ${co.cours}
+                    <span style="margin-left:auto;font-size:.68rem;opacity:.7">${co.slots.length} séances</span>
+                    <span class="section-chevron" id="chev-${coId}">▼</span>
+                </div><div class="section-body collapsed" id="${coId}" style="margin-left:16px">
+                    <table class="pres-table"><thead><tr><th>Date</th><th>Début</th><th>Fin</th><th>Présents</th><th>Attendus</th><th>Taux</th></tr></thead><tbody>`;
+                co.slots.forEach(s => {
+                    const color = s.taux >= 75 ? '#10b981' : s.taux >= 50 ? '#f59e0b' : '#ef4444';
+                    html += `<tr><td>${s.date}</td><td>${s.debut}</td><td>${s.fin}</td><td>${s.presents}</td><td>${s.attendus}</td><td><span style="color:${color};font-weight:700">${s.taux}%</span></td></tr>`;
+                });
+                html += '</tbody></table></div>';
             });
             html += '</div>';
         });
         container.innerHTML = html;
-
-        // Render horizontal bar charts for each course inside each class
-        data.forEach((cl, ci) => {
-            cl.cours.forEach((co, coi) => {
-                const chartId = `nested-chart-${ci}-${coi}`;
-                const wrap = document.getElementById('wrap-' + chartId);
-                if (!wrap) return;
-                wrap.innerHTML = `<div id="apex-${chartId}"></div>`;
-                const maxVal = cl.cours[0].value;
-                const chart = new ApexCharts(document.querySelector(`#apex-${chartId}`), {
-                    chart: { type: 'bar', height: 60, toolbar: { show: false }, sparkline: { enabled: false } },
-                    series: [{ data: [co.value] }],
-                    colors: [NESTED_COLORS[coi % NESTED_COLORS.length]],
-                    plotOptions: { bar: { horizontal: true, borderRadius: 3, barHeight: '70%' } },
-                    xaxis: { max: maxVal, labels: { show: false } },
-                    yaxis: { labels: { show: false } },
-                    dataLabels: { enabled: true, formatter: () => fmt(co.value) + ' (' + (cl.total ? ((co.value/cl.total)*100).toFixed(1) : 0) + '%)', style: { fontSize: '11px', fontWeight: 700, fontFamily: 'Inter' } },
-                    legend: { show: false },
-                    grid: { show: false, padding: { top: -15, bottom: -10, left: 0, right: 0 } },
-                    tooltip: { enabled: false }
-                });
-                chart.render();
-                apexInstances.push(chart);
-            });
-        });
     } catch(e) {
         console.error('[SMARPRDC] Nested presence:', e);
         container.innerHTML = '<div class="chart-error"><span class="chart-error-text">Erreur de chargement</span></div>';
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  PERSONNEL PRESENCE (Month → Day → Individual table)
+// ═══════════════════════════════════════════════════════════════════════════════
 
 const MOIS_FR = {1:'Janvier',2:'Février',3:'Mars',4:'Avril',5:'Mai',6:'Juin',7:'Juillet',8:'Août',9:'Septembre',10:'Octobre',11:'Novembre',12:'Décembre'};
 
@@ -350,24 +335,18 @@ async function loadPresencePersonnel() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!data.length) { wrap.innerHTML = '<div class="chart-error"><span class="chart-error-text">Aucune donnée</span></div>'; return; }
-
-        const badge = document.querySelector('#panel-pres-personnel .card-badge');
-        if (badge) badge.textContent = data.reduce((s,d) => s + d.total_pointages, 0).toLocaleString('fr-FR');
-
-        let html = '<table class="pres-table"><thead><tr><th>Mois</th><th>Agents</th><th>Jours</th><th>Pointages</th><th></th></tr></thead><tbody>';
-        data.forEach(row => {
+        let html = '';
+        data.forEach((row, mi) => {
             const parts = row.mois.split('-');
             const label = MOIS_FR[parseInt(parts[1])] + ' ' + parts[0];
-            html += `<tr>
-                <td><strong>${label}</strong></td>
-                <td>${row.agents_presents}</td>
-                <td>${row.jours_actifs}</td>
-                <td>${row.total_pointages}</td>
-                <td><button class="pres-detail-btn" onclick="loadMonthDetail('${row.mois}',this)">▶ Détails</button></td>
-            </tr>
-            <tr class="pres-detail-row" id="detail-${row.mois}" style="display:none"><td colspan="5"><div class="pres-detail-wrap"></div></td></tr>`;
+            const mId = 'pres-month-' + mi;
+            html += `<div class="subsection-title" onclick="toggleSection('${mId}');loadMonthDays('${row.mois}')" style="margin-top:8px">
+                <span class="sec-icon">📅</span> ${label}
+                <span class="section-chevron" id="chev-${mId}">▼</span>
+            </div><div class="section-body collapsed" id="${mId}">
+                <div id="pers-month-${row.mois}" data-loaded="0"><div class="chart-loading"><div class="spinner"></div></div></div>
+            </div>`;
         });
-        html += '</tbody></table>';
         wrap.innerHTML = html;
     } catch(e) {
         console.error('[SMARPRDC] Presence personnel:', e);
@@ -375,24 +354,31 @@ async function loadPresencePersonnel() {
     }
 }
 
-async function loadMonthDetail(mois, btn) {
-    const row = document.getElementById('detail-' + mois);
-    if (!row) return;
-    if (row.style.display !== 'none') { row.style.display = 'none'; btn.textContent = '▶ Détails'; return; }
-    row.style.display = '';
-    btn.textContent = '▼ Masquer';
-    const wrap = row.querySelector('.pres-detail-wrap');
-    if (wrap.dataset.loaded) return;
-    wrap.innerHTML = '<div class="chart-loading"><div class="spinner"></div></div>';
+async function loadMonthDays(mois) {
+    const container = document.getElementById('pers-month-' + mois);
+    if (!container || container.dataset.loaded === '1') return;
+    container.dataset.loaded = '1';
     try {
         const res = await fetch('/stats/presence/personnel/detail?mois=' + mois);
-        const data = await res.json();
-        let h = '<table class="pres-table pres-sub"><thead><tr><th>Agent</th><th>Jours</th><th>Pointages</th></tr></thead><tbody>';
-        data.forEach(d => { h += `<tr><td>${d.agent}</td><td>${d.jours_presents}</td><td>${d.total_pointages}</td></tr>`; });
-        h += '</tbody></table>';
-        wrap.innerHTML = h;
-        wrap.dataset.loaded = '1';
-    } catch(e) { wrap.innerHTML = '<span style="color:#ef4444">Erreur</span>'; }
+        const days = await res.json();
+        let html = '';
+        days.forEach((day, di) => {
+            const dayId = `pers-day-${mois}-${di}`;
+            const pc = day.agents.filter(a => a.present).length;
+            html += `<div class="subsection-title" onclick="toggleSection('${dayId}')" style="margin-top:4px;margin-left:16px;font-size:.78rem;background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
+                <span class="sec-icon">📋</span> ${day.jour}
+                <span style="margin-left:auto;font-size:.68rem;opacity:.7">${pc}/${day.agents.length} présents</span>
+                <span class="section-chevron" id="chev-${dayId}">▼</span>
+            </div><div class="section-body collapsed" id="${dayId}" style="margin-left:16px">
+                <table class="pres-table"><thead><tr><th>Agent</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>H. Supp</th></tr></thead><tbody>`;
+            day.agents.forEach(a => {
+                const b = a.present ? '<span style="color:#10b981;font-weight:700">✓ Oui</span>' : '<span style="color:#ef4444;font-weight:700">✗ Non</span>';
+                html += `<tr><td>${a.agent}</td><td>${a.arrivee}</td><td>${a.depart}</td><td>${b}</td><td>${a.heures_sup||'—'}</td></tr>`;
+            });
+            html += '</tbody></table></div>';
+        });
+        container.innerHTML = html;
+    } catch(e) { container.innerHTML = '<span style="color:#ef4444">Erreur</span>'; }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

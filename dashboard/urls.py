@@ -18,9 +18,7 @@ urlpatterns = [
     path('stats/personnel/genre', views.personnel_genre, name='stats-personnel-genre'),
     path('stats/personnel/grade', views.personnel_grade, name='stats-personnel-grade'),
 
-    # ── Présences Apprenants ──────────────────────────────────────────────
-    path('stats/presence/apprenants/cours', views.presence_apprenants_cours, name='stats-presence-appr-cours'),
-    path('stats/presence/apprenants/classe', views.presence_apprenants_classe, name='stats-presence-appr-classe'),
+    # ── Présences ─────────────────────────────────────────────────────────
     path('stats/presence/apprenants/nested', views.presence_apprenants_nested, name='stats-presence-appr-nested'),
 
     # ── Présences Personnel ──────────────────────────────────────────────
