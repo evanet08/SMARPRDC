@@ -292,16 +292,24 @@ async function loadNestedPresence() {
         data.forEach((cl, ci) => {
             const clId = 'nested-cl-' + ci;
             const totalSlots = cl.cours.reduce((s, c) => s + c.slots.length, 0);
+            const clPresent = cl.cours.reduce((s, c) => s + c.slots.reduce((ss, sl) => ss + sl.presents, 0), 0);
+            const clExpected = cl.cours.reduce((s, c) => s + c.slots.reduce((ss, sl) => ss + sl.attendus, 0), 0);
+            const clRate = clExpected ? ((clPresent / clExpected) * 100).toFixed(1) : 0;
+            const clColor = clRate >= 75 ? '#10b981' : clRate >= 50 ? '#f59e0b' : '#ef4444';
             html += `<div class="subsection-title" onclick="toggleSection('${clId}')" style="margin-top:8px">
                 <span class="sec-icon">📚</span> ${cl.classe}
-                <span style="margin-left:auto;font-size:.72rem;opacity:.7">${totalSlots} séances</span>
+                <span style="margin-left:auto;font-size:.72rem;opacity:.7">${totalSlots} séances — <strong style="color:${clColor}">${clRate}%</strong></span>
                 <span class="section-chevron" id="chev-${clId}">▼</span>
             </div><div class="section-body collapsed" id="${clId}">`;
             cl.cours.forEach((co, coi) => {
                 const coId = `nested-co-${ci}-${coi}`;
+                const coPresent = co.slots.reduce((s, sl) => s + sl.presents, 0);
+                const coExpected = co.slots.reduce((s, sl) => s + sl.attendus, 0);
+                const coRate = coExpected ? ((coPresent / coExpected) * 100).toFixed(1) : 0;
+                const coColor = coRate >= 75 ? '#10b981' : coRate >= 50 ? '#f59e0b' : '#ef4444';
                 html += `<div class="subsection-title" onclick="toggleSection('${coId}')" style="margin-top:4px;margin-left:16px;font-size:.78rem;background:linear-gradient(135deg,#eef2ff,#e0e7ff)">
                     <span class="sec-icon">📖</span> ${co.cours}
-                    <span style="margin-left:auto;font-size:.68rem;opacity:.7">${co.slots.length} séances</span>
+                    <span style="margin-left:auto;font-size:.68rem;opacity:.7">${co.slots.length} séances — <strong style="color:${coColor}">${coRate}%</strong></span>
                     <span class="section-chevron" id="chev-${coId}">▼</span>
                 </div><div class="section-body collapsed" id="${coId}" style="margin-left:16px">
                     <table class="pres-table"><thead><tr><th>Date</th><th>Début</th><th>Fin</th><th>Présents</th><th>Attendus</th><th>Taux</th></tr></thead><tbody>`;
