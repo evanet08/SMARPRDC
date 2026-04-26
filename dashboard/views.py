@@ -300,6 +300,13 @@ def presence_personnel_detail(request):
         for info in agents.values():
             fe = min(info['entries']) if info['entries'] else None
             le = max(info['exits']) if info['exits'] else None
+            # Fallback: if no exit recorded but multiple entries exist,
+            # use the last entry as departure when gap > 4h
+            if not le and fe and len(info['entries']) > 1:
+                last_entry = max(info['entries'])
+                gap = parse_t(last_entry) - parse_t(fe)
+                if gap > 4 * 3600:
+                    le = last_entry
             arr_s = parse_t(fe) if fe else None
             hd_s = parse_t(info['coupon_heureD'])
             present = arr_s is not None and arr_s <= hd_s + tolerance_h * 3600
