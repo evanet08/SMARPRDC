@@ -64,39 +64,33 @@ function renderPieChart(containerId, data, colors) {
     const total = data.reduce((s, d) => s + d.value, 0);
     wrap.innerHTML = `<div id="apex-${containerId}"></div>`;
 
-    // Update badge
     const badge = document.querySelector(`#${containerId} .card-badge`);
     if (badge) badge.textContent = fmt(total);
 
     const chart = new ApexCharts(document.querySelector(`#apex-${containerId}`), {
-        chart: { type: 'pie', height: 280, toolbar: { show: false } },
+        chart: { type: 'pie', height: 300, toolbar: { show: false } },
         series: data.map(d => d.value),
         labels: data.map(d => d.label),
         colors: colors.slice(0, data.length),
         dataLabels: {
             enabled: true,
             formatter: (val) => val.toFixed(1) + '%',
-            style: { fontSize: '10px', fontWeight: 600 },
+            style: { fontSize: '13px', fontWeight: 700 },
             dropShadow: { enabled: false }
         },
         legend: {
             position: 'bottom',
-            fontSize: '11px',
-            fontWeight: 500,
+            fontSize: '12px',
+            fontWeight: 600,
             fontFamily: 'Inter',
             markers: { size: 8, shape: 'circle' },
             itemMargin: { horizontal: 8, vertical: 4 }
         },
         tooltip: {
-            y: {
-                formatter: v => fmt(v) + ' (' + ((v / total) * 100).toFixed(1) + '%)'
-            }
+            y: { formatter: v => fmt(v) + ' (' + ((v / total) * 100).toFixed(1) + '%)' }
         },
         stroke: { width: 2, colors: ['#ffffff'] },
-        responsive: [{
-            breakpoint: 480,
-            options: { legend: { position: 'bottom' } }
-        }]
+        responsive: [{ breakpoint: 480, options: { legend: { position: 'bottom' } } }]
     });
     chart.render();
     apexInstances.push(chart);
@@ -113,21 +107,35 @@ function renderBarChart(containerId, data, colors) {
     if (badge) badge.textContent = fmt(total);
 
     const pctData = data.map(d => total ? +((d.value / total) * 100).toFixed(1) : 0);
+    const absData = data.map(d => d.value);
+    let showPct = true;
 
     const chart = new ApexCharts(document.querySelector(`#apex-${containerId}`), {
-        chart: { type: 'bar', height: Math.max(280, data.length * 28), toolbar: { show: false } },
+        chart: {
+            type: 'bar', height: Math.max(260, data.length * 32), toolbar: { show: false },
+            events: {
+                dataPointSelection: () => {
+                    showPct = !showPct;
+                    chart.updateSeries([{ data: showPct ? pctData : absData }]);
+                    chart.updateOptions({
+                        yaxis: { max: showPct ? undefined : undefined, labels: { style: { fontSize: '12px', fontWeight: 600, fontFamily: 'Inter' }, formatter: v => showPct ? v+'%' : fmt(v) } },
+                        dataLabels: { formatter: v => showPct ? v+'%' : fmt(v) }
+                    });
+                }
+            }
+        },
         series: [{ data: pctData }],
         colors: colors,
-        plotOptions: { bar: { horizontal: false, borderRadius: 4, columnWidth: '55%', distributed: true } },
+        plotOptions: { bar: { horizontal: false, borderRadius: 4, columnWidth: '65%', distributed: true } },
         xaxis: {
             categories: data.map(d => d.label),
-            labels: { style: { fontSize: '10px', fontWeight: 600, fontFamily: 'Inter' }, rotate: -45, rotateAlways: data.length > 5, trim: true, maxHeight: 100 }
+            labels: { style: { fontSize: '11px', fontWeight: 600, fontFamily: 'Inter' }, rotate: -45, rotateAlways: data.length > 5, trim: true, maxHeight: 100 }
         },
-        yaxis: { max: 100, labels: { style: { fontSize: '11px', fontWeight: 500, fontFamily: 'Inter' }, formatter: v => v + '%' } },
-        dataLabels: { enabled: true, formatter: v => v + '%', style: { fontSize: '10px', fontWeight: 700, fontFamily: 'Inter' }, offsetY: -4 },
+        yaxis: { labels: { style: { fontSize: '12px', fontWeight: 600, fontFamily: 'Inter' }, formatter: v => v + '%' } },
+        dataLabels: { enabled: true, formatter: v => v + '%', style: { fontSize: '12px', fontWeight: 700, fontFamily: 'Inter' }, offsetY: -4 },
         legend: { show: false },
-        grid: { borderColor: '#e5e7eb', yaxis: { lines: { show: true } }, xaxis: { lines: { show: false } } },
-        tooltip: { y: { formatter: (v, { dataPointIndex: i }) => v + '% (' + fmt(data[i].value) + ')' } }
+        grid: { borderColor: '#e5e7eb', padding: { top: -10, bottom: 0, left: 4, right: 4 } },
+        tooltip: { y: { formatter: (v, { dataPointIndex: i }) => showPct ? v+'% ('+fmt(data[i].value)+')' : fmt(v)+' ('+pctData[i]+'%)' } }
     });
     chart.render();
     apexInstances.push(chart);

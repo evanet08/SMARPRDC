@@ -216,7 +216,7 @@ def presence_apprenants_nested(request):
 def presence_personnel_summary(request):
     """List of months with presence data."""
     sql = """
-        SELECT DISTINCT DATE_FORMAT(pp.date_pointage, '%%Y-%%m') AS mois
+        SELECT DISTINCT CONCAT(YEAR(pp.date_pointage), '-', LPAD(MONTH(pp.date_pointage),2,'0')) AS mois
         FROM personnel_pointage pp
         JOIN personnel p ON p.id_personnel = pp.id_personnel
         WHERE p.isAdministratif = 1 AND p.en_fonction = 1
@@ -257,7 +257,7 @@ def presence_personnel_detail(request):
             FROM personnel_pointage pp
             JOIN personnel p ON p.id_personnel = pp.id_personnel
             WHERE p.isAdministratif = 1 AND p.en_fonction = 1
-              AND DATE_FORMAT(pp.date_pointage, '%%Y-%%m') = %s
+              AND CONCAT(YEAR(pp.date_pointage), '-', LPAD(MONTH(pp.date_pointage),2,'0')) = %s
             ORDER BY pp.date_pointage
         """, [mois])
         rows = _dictfetchall(cursor)
