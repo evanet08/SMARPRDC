@@ -512,6 +512,167 @@ async function loadPersonnelCumuls() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+//  TAB NAVIGATION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function switchTab(tabId, btn) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    const panel = document.getElementById(tabId);
+    if (panel) panel.classList.add('active');
+    if (btn) btn.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  EXPORT FUNCTIONALITY (PDF + Excel)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Global data caches for exports (populated by loaders)
+let _exportApprenants = null;
+let _exportPersonnelAll = null;
+let _exportCumuls = null;
+
+// Store presence data when loaded
+const _origLoadNested = loadNestedPresence;
+loadNestedPresence = async function() {
+    await _origLoadNested();
+    try {
+        const res = await fetch('/stats/presence/apprenants/nested');
+        if (res.ok) _exportApprenants = await res.json();
+    } catch(e) {}
+};
+
+function _collectPersonnelRows() {
+    // Lazy collect from cached cumuls
+    if (!_exportCumuls) return [];
+    return _exportCumuls;
+}
+
+async function _ensureCumulsData() {
+    if (_exportCumuls) return;
+    try {
+        const sumRes = await fetch('/stats/presence/personnel/summary');
+        const months = await sumRes.json();
+        const allData = await Promise.all(months.map(m =>
+            fetch('/stats/presence/personnel/detail?mois=' + m.mois).then(r => r.json())
+        ));
+        const agentMap = {};
+        const persRows = [];
+        allData.forEach(raw => {
+            raw.days.forEach(day => {
+                day.agents.forEach(a => {
+                    persRows.push({ agent: a.agent, date: day.jour, present: a.present ? 'Oui' : 'Non', heures_sup: a.heures_sup || '' });
+                    if (!agentMap[a.agent]) agentMap[a.agent] = { present: 0, absent: 0, expected: 0, overtime_s: 0 };
+                    agentMap[a.agent].expected++;
+                    if (a.present) agentMap[a.agent].present++;
+                    else agentMap[a.agent].absent++;
+                    agentMap[a.agent].overtime_s += (a.overtime_s || 0);
+                });
+            });
+        });
+        _exportPersonnelAll = persRows;
+        _exportCumuls = Object.entries(agentMap).sort((a, b) => b[1].overtime_s - a[1].overtime_s)
+            .map(([name, ag]) => ({ agent: name, presences: ag.present, absences: ag.absent, attendus: ag.expected, heures_sup: fmtOT(ag.overtime_s) }));
+    } catch(e) { console.error('Export data error:', e); }
+}
+
+async function exportGlobalPDF() {
+    await _ensureCumulsData();
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('l', 'mm', 'a4');
+    const now = new Date().toLocaleDateString('fr-FR');
+
+    // Title
+    doc.setFontSize(16);
+    doc.text('SMARPRDC — Rapport de Présences', 14, 15);
+    doc.setFontSize(9);
+    doc.text('Généré le ' + now, 14, 22);
+
+    // Sheet 1: Apprenants
+    if (_exportApprenants && _exportApprenants.length) {
+        doc.setFontSize(12);
+        doc.text('Présences Apprenants', 14, 30);
+        const rows = [];
+        _exportApprenants.forEach(cl => {
+            cl.cours.forEach(co => {
+                co.slots.forEach(s => {
+                    rows.push([cl.classe, co.cours, s.date, s.debut, s.fin, s.presents, s.attendus, s.taux + '%']);
+                });
+            });
+        });
+        doc.autoTable({
+            startY: 33, head: [['Classe', 'Cours', 'Date', 'Début', 'Fin', 'Présents', 'Attendus', 'Taux']],
+            body: rows, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [99, 102, 241] }
+        });
+    }
+
+    // Sheet 2: Personnel
+    if (_exportPersonnelAll && _exportPersonnelAll.length) {
+        doc.addPage();
+        doc.setFontSize(12);
+        doc.text('Présences Personnel (Détails)', 14, 15);
+        doc.autoTable({
+            startY: 18, head: [['Agent', 'Date', 'Présence', 'Heures supp']],
+            body: _exportPersonnelAll.map(r => [r.agent, r.date, r.present, r.heures_sup]),
+            styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [16, 185, 129] }
+        });
+    }
+
+    // Sheet 3: Cumuls
+    if (_exportCumuls && _exportCumuls.length) {
+        doc.addPage();
+        doc.setFontSize(12);
+        doc.text('Cumuls Heures Supplémentaires', 14, 15);
+        doc.autoTable({
+            startY: 18, head: [['Agent', 'Présences', 'Absences', 'Attendus', 'H. Supp cumulées']],
+            body: _exportCumuls.map(r => [r.agent, r.presences, r.absences, r.attendus, r.heures_sup]),
+            styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [245, 158, 11] }
+        });
+    }
+
+    doc.save('SMARPRDC_Presences_' + now.replace(/\//g, '-') + '.pdf');
+}
+
+async function exportGlobalExcel() {
+    await _ensureCumulsData();
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Apprenants
+    if (_exportApprenants && _exportApprenants.length) {
+        const rows = [['Classe', 'Cours', 'Date', 'Heure début', 'Heure fin', 'Présents', 'Attendus', 'Taux (%)']];
+        _exportApprenants.forEach(cl => {
+            cl.cours.forEach(co => {
+                co.slots.forEach(s => { rows.push([cl.classe, co.cours, s.date, s.debut, s.fin, s.presents, s.attendus, s.taux]); });
+            });
+        });
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = [{ wch: 25 }, { wch: 30 }, { wch: 12 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }];
+        XLSX.utils.book_append_sheet(wb, ws, 'Apprenants');
+    }
+
+    // Sheet 2: Personnel
+    if (_exportPersonnelAll && _exportPersonnelAll.length) {
+        const rows = [['Agent', 'Date', 'Présence', 'Heures supp']];
+        _exportPersonnelAll.forEach(r => { rows.push([r.agent, r.date, r.present, r.heures_sup]); });
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = [{ wch: 35 }, { wch: 12 }, { wch: 10 }, { wch: 12 }];
+        XLSX.utils.book_append_sheet(wb, ws, 'Personnel');
+    }
+
+    // Sheet 3: Cumuls
+    if (_exportCumuls && _exportCumuls.length) {
+        const rows = [['Agent', 'Présences', 'Absences', 'Total attendu', 'H. Supp cumulées']];
+        _exportCumuls.forEach(r => { rows.push([r.agent, r.presences, r.absences, r.attendus, r.heures_sup]); });
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = [{ wch: 35 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }];
+        XLSX.utils.book_append_sheet(wb, ws, 'Cumuls');
+    }
+
+    const now = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
+    XLSX.writeFile(wb, 'SMARPRDC_Presences_' + now + '.xlsx');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 //  DASHBOARD INIT
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -530,17 +691,13 @@ async function initDashboard() {
     });
 
     const totalGeneral = totalApprenants + totalPersonnel;
-    const chartCount = CHARTS_CONFIG.length;
-    const activeCount = results.filter(r => r.total > 0).length;
 
     const heroContainer = document.getElementById('hero-summary');
     if (heroContainer) {
         heroContainer.innerHTML =
             heroCard('c1', 'Apprenants Inscrits', fmt(totalApprenants), 'Année académique en cours', '🎓') +
             heroCard('c2', 'Personnel Actif',     fmt(totalPersonnel),  'Administratif en fonction', '👥') +
-            heroCard('c8', 'Effectif Total',      fmt(totalGeneral),    'Apprenants + Personnel',    '📊') +
-            heroCard('c5', 'Graphiques',          String(chartCount),   '+ tableaux de présences',   '📈') +
-            heroCard('c3', 'Indicateurs',         activeCount+'/'+chartCount, 'Endpoints actifs',    '✅');
+            heroCard('c8', 'Effectif Total',      fmt(totalGeneral),    'Apprenants + Personnel',    '📊');
     }
 
     const loader = document.getElementById('main-loader');
@@ -554,3 +711,4 @@ async function initDashboard() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', initDashboard);
+

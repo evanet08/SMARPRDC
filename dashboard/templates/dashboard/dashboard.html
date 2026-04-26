@@ -16,6 +16,10 @@
 
     <!-- ApexCharts -->
     <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.45.1/dist/apexcharts.min.js"></script>
+    <!-- Export: jsPDF + autoTable + SheetJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -60,14 +64,21 @@
             <!-- ═══ HERO KPI CARDS ═══ -->
             <div class="stats-hero" id="hero-summary"></div>
 
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <!--  SECTION 1: APPRENANTS                                    -->
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <div class="section-title section-toggle" onclick="toggleSection('sec-apprenants')">
-                <span class="sec-icon">🎓</span> Statistiques des Apprenants
-                <span class="section-chevron" id="chev-sec-apprenants">▼</span>
+            <!-- ═══ TAB NAVIGATION ═══ -->
+            <div class="tab-nav" id="tab-nav">
+                <button class="tab-btn active" data-tab="tab-apprenants" onclick="switchTab('tab-apprenants', this)">
+                    <span class="sec-icon">🎓</span> Apprenants
+                </button>
+                <button class="tab-btn" data-tab="tab-personnel" onclick="switchTab('tab-personnel', this)">
+                    <span class="sec-icon">👥</span> Personnels
+                </button>
+                <button class="tab-btn" data-tab="tab-presences" onclick="switchTab('tab-presences', this)">
+                    <span class="sec-icon">📋</span> Taux de Présences
+                </button>
             </div>
-            <div class="section-body" id="sec-apprenants">
+
+            <!-- ═══ TAB 1: APPRENANTS ═══ -->
+            <div class="tab-panel active" id="tab-apprenants">
                 <!-- Genre (pie) + Classe (bar) — side by side -->
                 <div class="chart-grid chart-grid-2">
                     <div class="chart-card" id="chart-appr-genre">
@@ -117,14 +128,8 @@
                 </div>
             </div>
 
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <!--  SECTION 2: PERSONNEL                                     -->
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <div class="section-title section-toggle" onclick="toggleSection('sec-personnel')">
-                <span class="sec-icon">👥</span> Statistiques des Personnels
-                <span class="section-chevron" id="chev-sec-personnel">▼</span>
-            </div>
-            <div class="section-body" id="sec-personnel">
+            <!-- ═══ TAB 2: PERSONNEL ═══ -->
+            <div class="tab-panel" id="tab-personnel">
                 <!-- Genre (pie) -->
                 <div class="chart-grid chart-grid-2">
                     <div class="chart-card" id="chart-pers-genre">
@@ -147,14 +152,17 @@
                 </div>
             </div>
 
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <!--  SECTION 3: TAUX DE PRÉSENCES                             -->
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <div class="section-title section-toggle" onclick="toggleSection('sec-presences')">
-                <span class="sec-icon">📋</span> Taux de Présences
-                <span class="section-chevron" id="chev-sec-presences">▼</span>
-            </div>
-            <div class="section-body" id="sec-presences">
+            <!-- ═══ TAB 3: TAUX DE PRÉSENCES ═══ -->
+            <div class="tab-panel" id="tab-presences">
+
+                <!-- Global export buttons -->
+                <div class="export-bar">
+                    <span style="font-weight:600;font-size:.82rem">📊 Rapport global</span>
+                    <div class="export-btns">
+                        <button class="export-btn export-pdf" onclick="exportGlobalPDF()">📄 Export PDF</button>
+                        <button class="export-btn export-excel" onclick="exportGlobalExcel()">📗 Export Excel</button>
+                    </div>
+                </div>
 
                 <!-- Sub-section: Apprenants -->
                 <div class="subsection-title" onclick="toggleSection('sub-pres-appr')">
