@@ -146,3 +146,97 @@ def personnel_grade(request):
         GROUP BY g.code
     """
     return Response(_run_stats_query(sql))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  PRESENCE APPRENANTS (id_annee = 5, absent = 0)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@api_view(['GET'])
+def presence_apprenants_cours(request):
+    """Présences des apprenants par cours."""
+    sql = """
+        SELECT IFNULL(co.cours,'N/A') AS label, COUNT(*) AS value
+        FROM horaire_presence hp
+        JOIN horaire h ON hp.id_horaire = h.id_horaire
+        JOIN cours co ON h.id_cours = co.id_cours AND co.id_annee = h.id_annee
+        WHERE h.id_annee = 5 AND hp.absent = 0
+        GROUP BY co.cours
+        ORDER BY value DESC
+    """
+    return Response(_run_stats_query(sql))
+
+
+@api_view(['GET'])
+def presence_apprenants_classe(request):
+    """Présences des apprenants par classe."""
+    sql = """
+        SELECT
+            CASE
+                WHEN h.groupe IS NULL OR h.groupe = ''
+                THEN CONCAT(IFNULL(cl.Classe,'N/A'),' ',IFNULL(d.depSigle,'N/A'))
+                ELSE CONCAT(IFNULL(cl.Classe,'N/A'),' ',h.groupe,' ',IFNULL(d.depSigle,'N/A'))
+            END AS label,
+            COUNT(*) AS value
+        FROM horaire_presence hp
+        JOIN horaire h ON hp.id_horaire = h.id_horaire
+        JOIN classe cl ON cl.id_classe = h.id_classe
+        LEFT JOIN departement d ON d.id_departement = h.id_departement
+        WHERE h.id_annee = 5 AND hp.absent = 0
+        GROUP BY cl.Classe, h.groupe, d.depSigle
+        ORDER BY value DESC
+    """
+    return Response(_run_stats_query(sql))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  PRESENCE PERSONNEL (isAdministratif=1, en_fonction=1)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@api_view(['GET'])
+def presence_personnel_summary(request):
+    """Résumé des présences du personnel par mois."""
+    sql = """
+        SELECT
+            DATE_FORMAT(pp.date_pointage, '%%Y-%%m') AS mois,
+            COUNT(DISTINCT pp.id_personnel) AS agents_presents,
+            COUNT(DISTINCT DATE(pp.date_pointage)) AS jours_actifs,
+            COUNT(*) AS total_pointages
+        FROM personnel_pointage pp
+        JOIN personnel p ON p.id_personnel = pp.id_personnel
+        WHERE p.isAdministratif = 1 AND p.en_fonction = 1
+          AND pp.type_pointage = 1
+        GROUP BY DATE_FORMAT(pp.date_pointage, '%%Y-%%m')
+        ORDER BY mois DESC
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(sql)
+        return Response(_dictfetchall(cursor))
+
+
+@api_view(['GET'])
+def presence_personnel_detail(request):
+    """Détail des présences du personnel : par agent pour un mois donné."""
+    mois = request.GET.get('mois', '')
+    if not mois:
+        return Response({'error': 'Paramètre mois requis (ex: 2026-03)'}, status=400)
+
+    sql = """
+        SELECT
+            CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS agent,
+            COUNT(DISTINCT DATE(pp.date_pointage)) AS jours_presents,
+            MIN(DATE(pp.date_pointage)) AS premier_pointage,
+            MAX(DATE(pp.date_pointage)) AS dernier_pointage,
+            COUNT(*) AS total_pointages
+        FROM personnel_pointage pp
+        JOIN personnel p ON p.id_personnel = pp.id_personnel
+        WHERE p.isAdministratif = 1 AND p.en_fonction = 1
+          AND pp.type_pointage = 1
+          AND DATE_FORMAT(pp.date_pointage, '%%Y-%%m') = %s
+        GROUP BY pp.id_personnel, p.nom, p.postnom, p.prenom
+        ORDER BY jours_presents DESC
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(sql, [mois])
+        return Response(_dictfetchall(cursor))
+

@@ -19,6 +19,10 @@ const CHARTS_CONFIG = [
     // ── Personnel ────────────────────────────────────────────────────────
     { id:'chart-pers-genre',     endpoint:'/stats/personnel/genre',      title:'Répartition par Genre',     icon:'♂♀', type:'pie', colors:['#3b82f6','#ec4899','#94a3b8','#64748b','#a78bfa'], section:'personnel' },
     { id:'chart-pers-grade',     endpoint:'/stats/personnel/grade',      title:'Par Grade',                 icon:'🏅', type:'bar', colors:['#f43f5e','#fb7185','#f59e0b','#fbbf24','#ef4444','#dc2626','#b91c1c','#e11d48','#fda4af','#fecdd3'], section:'personnel' },
+
+    // ── Présences Apprenants ─────────────────────────────────────────────
+    { id:'chart-pres-appr-classe', endpoint:'/stats/presence/apprenants/classe', title:'Présences par Classe', icon:'📚', type:'bar', colors:['#0ea5e9','#06b6d4','#14b8a6','#10b981','#22c55e','#84cc16','#eab308','#f97316','#ef4444','#ec4899'], section:'presence' },
+    { id:'chart-pres-appr-cours',  endpoint:'/stats/presence/apprenants/cours',  title:'Présences par Cours',  icon:'📖', type:'bar', colors:['#8b5cf6','#a78bfa','#6366f1','#818cf8','#3b82f6','#0ea5e9','#06b6d4','#14b8a6','#10b981','#22c55e'], section:'presence' },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -270,39 +274,96 @@ function heroCard(colorClass, label, value, subtitle, iconEmoji, extras) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+//  PERSONNEL PRESENCE TABLE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const MOIS_FR = {1:'Janvier',2:'Février',3:'Mars',4:'Avril',5:'Mai',6:'Juin',7:'Juillet',8:'Août',9:'Septembre',10:'Octobre',11:'Novembre',12:'Décembre'};
+
+async function loadPresencePersonnel() {
+    const wrap = document.getElementById('pres-personnel-wrap');
+    if (!wrap) return;
+    wrap.innerHTML = '<div class="chart-loading"><div class="spinner"></div><span class="chart-loading-text">Chargement…</span></div>';
+    try {
+        const res = await fetch('/stats/presence/personnel/summary');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data.length) { wrap.innerHTML = '<div class="chart-error"><span class="chart-error-text">Aucune donnée</span></div>'; return; }
+
+        const badge = document.querySelector('#panel-pres-personnel .card-badge');
+        if (badge) badge.textContent = data.reduce((s,d) => s + d.total_pointages, 0).toLocaleString('fr-FR');
+
+        let html = '<table class="pres-table"><thead><tr><th>Mois</th><th>Agents</th><th>Jours</th><th>Pointages</th><th></th></tr></thead><tbody>';
+        data.forEach(row => {
+            const parts = row.mois.split('-');
+            const label = MOIS_FR[parseInt(parts[1])] + ' ' + parts[0];
+            html += `<tr>
+                <td><strong>${label}</strong></td>
+                <td>${row.agents_presents}</td>
+                <td>${row.jours_actifs}</td>
+                <td>${row.total_pointages}</td>
+                <td><button class="pres-detail-btn" onclick="loadMonthDetail('${row.mois}',this)">▶ Détails</button></td>
+            </tr>
+            <tr class="pres-detail-row" id="detail-${row.mois}" style="display:none"><td colspan="5"><div class="pres-detail-wrap"></div></td></tr>`;
+        });
+        html += '</tbody></table>';
+        wrap.innerHTML = html;
+    } catch(e) {
+        console.error('[SMARPRDC] Presence personnel:', e);
+        wrap.innerHTML = '<div class="chart-error"><span class="chart-error-text">Erreur de chargement</span></div>';
+    }
+}
+
+async function loadMonthDetail(mois, btn) {
+    const row = document.getElementById('detail-' + mois);
+    if (!row) return;
+    if (row.style.display !== 'none') { row.style.display = 'none'; btn.textContent = '▶ Détails'; return; }
+    row.style.display = '';
+    btn.textContent = '▼ Masquer';
+    const wrap = row.querySelector('.pres-detail-wrap');
+    if (wrap.dataset.loaded) return;
+    wrap.innerHTML = '<div class="chart-loading"><div class="spinner"></div></div>';
+    try {
+        const res = await fetch('/stats/presence/personnel/detail?mois=' + mois);
+        const data = await res.json();
+        let h = '<table class="pres-table pres-sub"><thead><tr><th>Agent</th><th>Jours</th><th>Pointages</th></tr></thead><tbody>';
+        data.forEach(d => { h += `<tr><td>${d.agent}</td><td>${d.jours_presents}</td><td>${d.total_pointages}</td></tr>`; });
+        h += '</tbody></table>';
+        wrap.innerHTML = h;
+        wrap.dataset.loaded = '1';
+    } catch(e) { wrap.innerHTML = '<span style="color:#ef4444">Erreur</span>'; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 //  DASHBOARD INIT
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function initDashboard() {
-    // Destroy any previous charts
     apexInstances.forEach(c => { try { c.destroy(); } catch(e) {} });
     apexInstances = [];
 
     const results = await Promise.all(CHARTS_CONFIG.map(loadChart));
+    loadPresencePersonnel();
 
-    // Compute section totals
-    let totalApprenants = 0;
-    let totalPersonnel = 0;
-
+    let totalApprenants = 0, totalPersonnel = 0;
     results.forEach(r => {
         if (r.section === 'apprenants') totalApprenants = Math.max(totalApprenants, r.total);
         if (r.section === 'personnel')  totalPersonnel  = Math.max(totalPersonnel, r.total);
     });
 
     const totalGeneral = totalApprenants + totalPersonnel;
+    const chartCount = CHARTS_CONFIG.length;
+    const activeCount = results.filter(r => r.total > 0).length;
 
-    // Render hero cards
     const heroContainer = document.getElementById('hero-summary');
     if (heroContainer) {
         heroContainer.innerHTML =
             heroCard('c1', 'Apprenants Inscrits', fmt(totalApprenants), 'Année académique en cours', '🎓') +
             heroCard('c2', 'Personnel Actif',     fmt(totalPersonnel),  'Administratif en fonction', '👥') +
             heroCard('c8', 'Effectif Total',      fmt(totalGeneral),    'Apprenants + Personnel',    '📊') +
-            heroCard('c5', 'Graphiques',          '7',                  '5 apprenants · 2 personnel','📈') +
-            heroCard('c3', 'Indicateurs',         results.filter(r => r.total > 0).length + '/7', 'Endpoints actifs', '✅');
+            heroCard('c5', 'Graphiques',          String(chartCount),   '+ tableaux de présences',   '📈') +
+            heroCard('c3', 'Indicateurs',         activeCount+'/'+chartCount, 'Endpoints actifs',    '✅');
     }
 
-    // Hide loader, show content
     const loader = document.getElementById('main-loader');
     const content = document.getElementById('main-content');
     if (loader) loader.style.display = 'none';

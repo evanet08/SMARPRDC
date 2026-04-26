@@ -147,6 +147,61 @@
                 </div>
             </div>
 
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!--  SECTION 3: TAUX DE PRÉSENCES                             -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <div class="section-title section-toggle" onclick="toggleSection('sec-presences')">
+                <span class="sec-icon">📋</span> Taux de Présences
+                <span class="section-chevron" id="chev-sec-presences">▼</span>
+            </div>
+            <div class="section-body" id="sec-presences">
+
+                <!-- Sub-section: Apprenants -->
+                <div class="subsection-title" onclick="toggleSection('sub-pres-appr')">
+                    <span class="sec-icon">🎓</span> Présences Apprenants
+                    <span class="section-chevron" id="chev-sub-pres-appr">▼</span>
+                </div>
+                <div class="section-body" id="sub-pres-appr">
+                    <!-- Par Classe (full width) -->
+                    <div class="chart-grid chart-grid-1">
+                        <div class="chart-card" id="chart-pres-appr-classe">
+                            <h3>
+                                <span class="card-icon">📚</span> Présences par Classe
+                                <span class="card-badge">—</span>
+                            </h3>
+                            <div class="chart-wrap"></div>
+                        </div>
+                    </div>
+                    <!-- Par Cours (full width) -->
+                    <div class="chart-grid chart-grid-1" style="margin-top:14px">
+                        <div class="chart-card" id="chart-pres-appr-cours">
+                            <h3>
+                                <span class="card-icon">📖</span> Présences par Cours
+                                <span class="card-badge">—</span>
+                            </h3>
+                            <div class="chart-wrap"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sub-section: Personnel -->
+                <div class="subsection-title" onclick="toggleSection('sub-pres-pers')" style="margin-top:14px">
+                    <span class="sec-icon">👥</span> Présences Personnel
+                    <span class="section-chevron" id="chev-sub-pres-pers">▼</span>
+                </div>
+                <div class="section-body" id="sub-pres-pers">
+                    <div class="chart-grid chart-grid-1">
+                        <div class="chart-card" id="panel-pres-personnel">
+                            <h3>
+                                <span class="card-icon">📊</span> Résumé Mensuel des Pointages
+                                <span class="card-badge">—</span>
+                            </h3>
+                            <div class="chart-wrap" id="pres-personnel-wrap"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div><!-- /main-content -->
     </div><!-- /main-container -->
 
