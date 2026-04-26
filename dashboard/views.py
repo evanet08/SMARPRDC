@@ -37,46 +37,36 @@ def dashboard_home(request):
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  APPRENANTS STATS (id_annee = 5)
-#  Real schema: etudiant (id_etudiant, genre, province_provenance, promotion,
-#               id_service, id_grade) → etudiant_inscription → classe
+#  Filter: etudiant_inscription.id_annee = 5
+#  Grade: personnel_grade_administratif.code via e.id_grade_administratif
+#  Promotion: CONCAT(classe.Classe, jourSoir, groupe)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @api_view(['GET'])
 def apprenants_genre(request):
     """Répartition des apprenants par genre."""
     sql = """
-        SELECT
-            IFNULL(
-                CASE e.genre
-                    WHEN 'M' THEN 'Masculin'
-                    WHEN 'F' THEN 'Féminin'
-                    ELSE IFNULL(NULLIF(e.genre, ''), 'N/A')
-                END,
-                'N/A'
-            ) AS label,
-            COUNT(*) AS value
+        SELECT IFNULL(e.genre,'N/A') AS label, COUNT(*) AS value
         FROM etudiant e
-        INNER JOIN etudiant_inscription ei ON ei.id_etudiant = e.id_etudiant
-        WHERE ei.id_annee = 5
-        GROUP BY label
-        ORDER BY value DESC
+        JOIN etudiant_inscription i ON e.id_etudiant = i.id_etudiant
+        WHERE i.id_annee = 5
+        GROUP BY e.genre
     """
     return Response(_run_stats_query(sql))
 
 
 @api_view(['GET'])
 def apprenants_promotion(request):
-    """Répartition des apprenants par promotion (Classe designation)."""
+    """Répartition des apprenants par promotion (Classe + jourSoir + groupe)."""
     sql = """
         SELECT
-            IFNULL(NULLIF(c.Classe, ''), 'N/A') AS label,
+            CONCAT(IFNULL(c.Classe,'N/A'),' ',IFNULL(i.jourSoir,'N/A'),' ',IFNULL(i.groupe,'N/A')) AS label,
             COUNT(*) AS value
         FROM etudiant e
-        INNER JOIN etudiant_inscription ei ON ei.id_etudiant = e.id_etudiant
-        INNER JOIN classe c ON c.id_classe = ei.id_classe
-        WHERE ei.id_annee = 5
-        GROUP BY c.id_classe, c.Classe
-        ORDER BY value DESC
+        JOIN etudiant_inscription i ON e.id_etudiant = i.id_etudiant
+        JOIN classe c ON c.id_classe = i.id_classe
+        WHERE i.id_annee = 5
+        GROUP BY c.Classe, i.jourSoir, i.groupe
     """
     return Response(_run_stats_query(sql))
 
@@ -85,14 +75,11 @@ def apprenants_promotion(request):
 def apprenants_province(request):
     """Répartition des apprenants par province de provenance."""
     sql = """
-        SELECT
-            IFNULL(NULLIF(e.province_provenance, ''), 'N/A') AS label,
-            COUNT(*) AS value
+        SELECT IFNULL(e.province_provenance,'N/A') AS label, COUNT(*) AS value
         FROM etudiant e
-        INNER JOIN etudiant_inscription ei ON ei.id_etudiant = e.id_etudiant
-        WHERE ei.id_annee = 5
-        GROUP BY label
-        ORDER BY value DESC
+        JOIN etudiant_inscription i ON e.id_etudiant = i.id_etudiant
+        WHERE i.id_annee = 5
+        GROUP BY e.province_provenance
     """
     return Response(_run_stats_query(sql))
 
@@ -101,77 +88,57 @@ def apprenants_province(request):
 def apprenants_service(request):
     """Répartition des apprenants par service de provenance."""
     sql = """
-        SELECT
-            IFNULL(s.service, 'N/A') AS label,
-            COUNT(*) AS value
+        SELECT IFNULL(s.service,'N/A') AS label, COUNT(*) AS value
         FROM etudiant e
-        INNER JOIN etudiant_inscription ei ON ei.id_etudiant = e.id_etudiant
-        LEFT JOIN etudiant_service_provenance s ON s.id_service = e.id_service
-        WHERE ei.id_annee = 5
-        GROUP BY s.id_service, s.service
-        ORDER BY value DESC
+        JOIN etudiant_inscription i ON e.id_etudiant = i.id_etudiant
+        LEFT JOIN personnel_service s ON e.id_service = s.id_service
+        WHERE i.id_annee = 5
+        GROUP BY s.service
     """
     return Response(_run_stats_query(sql))
 
 
 @api_view(['GET'])
 def apprenants_grade(request):
-    """Répartition des apprenants par grade académique."""
+    """Répartition des apprenants par grade administratif."""
     sql = """
-        SELECT
-            IFNULL(g.grade, 'N/A') AS label,
-            COUNT(*) AS value
+        SELECT IFNULL(g.code,'N/A') AS label, COUNT(*) AS value
         FROM etudiant e
-        INNER JOIN etudiant_inscription ei ON ei.id_etudiant = e.id_etudiant
-        LEFT JOIN personnel_grade g ON g.id_grade = e.id_grade
-        WHERE ei.id_annee = 5
-        GROUP BY g.id_grade, g.grade
-        ORDER BY value DESC
+        JOIN etudiant_inscription i ON e.id_etudiant = i.id_etudiant
+        LEFT JOIN personnel_grade_administratif g
+            ON e.id_grade_administratif = g.id_grade_administratif
+        WHERE i.id_annee = 5
+        GROUP BY g.code
     """
     return Response(_run_stats_query(sql))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  PERSONNEL STATS (isAdministratif = 1, en_fonction = 1)
-#  Real schema: personnel (id_personnel, genre, id_grade, isAdministratif,
-#               en_fonction) → personnel_grade
+#  Grade: personnel_grade_administratif.code via p.id_grade_administratif
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @api_view(['GET'])
 def personnel_genre(request):
     """Répartition du personnel par genre."""
     sql = """
-        SELECT
-            IFNULL(
-                CASE p.genre
-                    WHEN 'M' THEN 'Masculin'
-                    WHEN 'F' THEN 'Féminin'
-                    ELSE IFNULL(NULLIF(p.genre, ''), 'N/A')
-                END,
-                'N/A'
-            ) AS label,
-            COUNT(*) AS value
+        SELECT IFNULL(p.genre,'N/A') AS label, COUNT(*) AS value
         FROM personnel p
-        WHERE p.isAdministratif = 1
-          AND p.en_fonction = 1
-        GROUP BY label
-        ORDER BY value DESC
+        WHERE p.isAdministratif = 1 AND p.en_fonction = 1
+        GROUP BY p.genre
     """
     return Response(_run_stats_query(sql))
 
 
 @api_view(['GET'])
 def personnel_grade(request):
-    """Répartition du personnel par grade."""
+    """Répartition du personnel par grade administratif."""
     sql = """
-        SELECT
-            IFNULL(g.grade, 'N/A') AS label,
-            COUNT(*) AS value
+        SELECT IFNULL(g.code,'N/A') AS label, COUNT(*) AS value
         FROM personnel p
-        LEFT JOIN personnel_grade g ON g.id_grade = p.id_grade
-        WHERE p.isAdministratif = 1
-          AND p.en_fonction = 1
-        GROUP BY g.id_grade, g.grade
-        ORDER BY value DESC
+        LEFT JOIN personnel_grade_administratif g
+            ON p.id_grade_administratif = g.id_grade_administratif
+        WHERE p.isAdministratif = 1 AND p.en_fonction = 1
+        GROUP BY g.code
     """
     return Response(_run_stats_query(sql))

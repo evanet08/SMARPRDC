@@ -10,15 +10,15 @@
 
 const CHARTS_CONFIG = [
     // ── Apprenants ───────────────────────────────────────────────────────
-    { id:'chart-appr-genre',     endpoint:'/stats/apprenants/genre',     title:'Répartition par Genre',     icon:'♂♀', type:'donut',   colors:['#3b82f6','#ec4899','#94a3b8'], section:'apprenants' },
-    { id:'chart-appr-promotion', endpoint:'/stats/apprenants/promotion', title:'Par Promotion',             icon:'📚', type:'bar',     colors:['#6366f1','#818cf8','#a5b4fc','#c7d2fe','#4f46e5','#7c3aed','#4338ca'], section:'apprenants' },
-    { id:'chart-appr-province',  endpoint:'/stats/apprenants/province',  title:'Par Province',              icon:'🗺️', type:'bar',     colors:['#06b6d4','#0ea5e9','#38bdf8','#7dd3fc','#0284c7','#0369a1','#075985'], section:'apprenants' },
-    { id:'chart-appr-service',   endpoint:'/stats/apprenants/service',   title:'Par Service / Département', icon:'🏢', type:'bar',     colors:['#10b981','#34d399','#6ee7b7','#059669','#047857','#14b8a6','#2dd4bf'], section:'apprenants' },
-    { id:'chart-appr-grade',     endpoint:'/stats/apprenants/grade',     title:'Par Grade Académique',      icon:'🎓', type:'donut',   colors:['#8b5cf6','#a78bfa','#c4b5fd','#7c3aed','#6d28d9','#5b21b6','#a855f7'], section:'apprenants' },
+    { id:'chart-appr-genre',     endpoint:'/stats/apprenants/genre',     title:'Répartition par Genre',     icon:'♂♀', type:'donut', colors:['#3b82f6','#ec4899','#94a3b8','#64748b','#a78bfa'], section:'apprenants' },
+    { id:'chart-appr-promotion', endpoint:'/stats/apprenants/promotion', title:'Par Promotion',             icon:'📚', type:'donut', colors:['#6366f1','#818cf8','#a5b4fc','#c7d2fe','#4f46e5','#7c3aed','#4338ca','#312e81','#e0e7ff','#93c5fd'], section:'apprenants' },
+    { id:'chart-appr-province',  endpoint:'/stats/apprenants/province',  title:'Par Province',              icon:'🗺️', type:'donut', colors:['#06b6d4','#0ea5e9','#38bdf8','#7dd3fc','#0284c7','#0369a1','#075985','#164e63','#22d3ee','#67e8f9'], section:'apprenants' },
+    { id:'chart-appr-service',   endpoint:'/stats/apprenants/service',   title:'Par Service / Département', icon:'🏢', type:'donut', colors:['#10b981','#34d399','#6ee7b7','#059669','#047857','#14b8a6','#2dd4bf','#0f766e','#a7f3d0','#d1fae5'], section:'apprenants' },
+    { id:'chart-appr-grade',     endpoint:'/stats/apprenants/grade',     title:'Par Grade Académique',      icon:'🎓', type:'donut', colors:['#8b5cf6','#a78bfa','#c4b5fd','#7c3aed','#6d28d9','#5b21b6','#a855f7','#ddd6fe','#ede9fe','#4c1d95'], section:'apprenants' },
 
     // ── Personnel ────────────────────────────────────────────────────────
-    { id:'chart-pers-genre',     endpoint:'/stats/personnel/genre',      title:'Répartition par Genre',     icon:'♂♀', type:'donut',   colors:['#3b82f6','#ec4899','#94a3b8'], section:'personnel' },
-    { id:'chart-pers-grade',     endpoint:'/stats/personnel/grade',      title:'Par Grade',                 icon:'🏅', type:'bar',     colors:['#f43f5e','#fb7185','#f59e0b','#fbbf24','#ef4444','#dc2626','#b91c1c'], section:'personnel' },
+    { id:'chart-pers-genre',     endpoint:'/stats/personnel/genre',      title:'Répartition par Genre',     icon:'♂♀', type:'donut', colors:['#3b82f6','#ec4899','#94a3b8','#64748b','#a78bfa'], section:'personnel' },
+    { id:'chart-pers-grade',     endpoint:'/stats/personnel/grade',      title:'Par Grade',                 icon:'🏅', type:'donut', colors:['#f43f5e','#fb7185','#f59e0b','#fbbf24','#ef4444','#dc2626','#b91c1c','#e11d48','#fda4af','#fecdd3'], section:'personnel' },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -123,54 +123,7 @@ function renderDonutChart(containerId, data, colors) {
     apexInstances.push(chart);
 }
 
-function renderBarChart(containerId, data, colors) {
-    const wrap = document.querySelector(`#${containerId} .chart-wrap`);
-    if (!wrap) return;
 
-    const total = data.reduce((s, d) => s + d.value, 0);
-    wrap.innerHTML = `<div id="apex-${containerId}"></div>`;
-
-    // Update badge
-    const badge = document.querySelector(`#${containerId} .card-badge`);
-    if (badge) badge.textContent = fmt(total);
-
-    const chart = new ApexCharts(document.querySelector(`#apex-${containerId}`), {
-        chart: { type: 'bar', height: Math.max(220, data.length * 32), toolbar: { show: false } },
-        series: [{ data: data.map(d => d.value) }],
-        colors: colors,
-        plotOptions: {
-            bar: {
-                horizontal: true,
-                borderRadius: 4,
-                barHeight: '60%',
-                distributed: true
-            }
-        },
-        xaxis: {
-            categories: data.map(d => d.label),
-            labels: { show: false }
-        },
-        yaxis: {
-            labels: {
-                style: { fontSize: '11px', fontWeight: 600, fontFamily: 'Inter' },
-                maxWidth: 180
-            }
-        },
-        dataLabels: {
-            enabled: true,
-            formatter: v => fmt(v),
-            style: { fontSize: '11px', fontWeight: 700, fontFamily: 'Inter' },
-            offsetX: 6
-        },
-        legend: { show: false },
-        grid: { borderColor: '#e5e7eb', xaxis: { lines: { show: false } } },
-        tooltip: {
-            y: { formatter: v => fmt(v) + ' (' + ((v / total) * 100).toFixed(1) + '%)' }
-        }
-    });
-    chart.render();
-    apexInstances.push(chart);
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  DATA FETCHING
@@ -188,11 +141,7 @@ async function loadChart(config) {
             return { section: config.section, total: 0 };
         }
 
-        if (config.type === 'donut') {
-            renderDonutChart(config.id, data, config.colors);
-        } else {
-            renderBarChart(config.id, data, config.colors);
-        }
+        renderDonutChart(config.id, data, config.colors);
 
         const total = data.reduce((s, d) => s + d.value, 0);
         return { section: config.section, total };
