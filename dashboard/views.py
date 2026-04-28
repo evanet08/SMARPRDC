@@ -393,6 +393,7 @@ def carriere_conges(request):
     """List all congés with agent and type info."""
     sql = """
         SELECT pc.id_conge, pc.id_personnel, pc.id_congetype, pc.startdate, pc.enddate, pc.id_annee,
+               pc.jours_ouvrables,
                CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS agent,
                p.matricule, p.matriculeFP, p.genre, p.recrutement_date,
                IFNULL(g.code,'—') AS grade_code,
@@ -446,6 +447,7 @@ def carriere_conges_save(request):
     id_congetype = data.get('id_congetype')
     startdate = data.get('startdate')
     enddate = data.get('enddate')
+    jours_ouvrables = data.get('jours_ouvrables', 0)
     id_annee = data.get('id_annee', 5)
 
     if not all([id_personnel, id_congetype, startdate, enddate]):
@@ -453,8 +455,8 @@ def carriere_conges_save(request):
 
     with connection.cursor() as cursor:
         cursor.execute(
-            """INSERT INTO personnel_conges (id_personnel, id_congetype, startdate, enddate, id_annee)
-               VALUES (%s, %s, %s, %s, %s)""",
-            [id_personnel, id_congetype, startdate, enddate, id_annee]
+            """INSERT INTO personnel_conges (id_personnel, id_congetype, startdate, enddate, jours_ouvrables, id_annee)
+               VALUES (%s, %s, %s, %s, %s, %s)""",
+            [id_personnel, id_congetype, startdate, enddate, jours_ouvrables, id_annee]
         )
     return Response({'success': True})

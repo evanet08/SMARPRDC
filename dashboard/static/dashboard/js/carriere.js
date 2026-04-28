@@ -27,9 +27,7 @@ function switchTab(tabId, btn) {
 
 function openModal(id) { document.getElementById(id).classList.add('active'); }
 function closeModal(id) { document.getElementById(id).classList.remove('active'); }
-
 function getCsrf() { const c = document.cookie.match(/csrftoken=([^;]+)/); return c ? c[1] : ''; }
-
 async function apiPost(url, data) {
     return (await fetch(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
@@ -37,9 +35,21 @@ async function apiPost(url, data) {
     })).json();
 }
 
+// ═══ LABEL: "En fonction" → "Disponible" ═════════════════════════════════════
+function displayEtat(parametre) { return parametre === 'En fonction' ? 'Disponible' : parametre; }
+
 // ═══ STATUS BADGE ════════════════════════════════════════════════════════════
 const SIGLE_CLASS = { 'EnFx':'st-enfx','EnDT':'st-endt','F0RM':'st-form','EnCA':'st-enca','EnCC':'st-encc','EnCM':'st-encm','DSRT':'st-dsrt','MSIO':'st-msio','RTRT':'st-rtrt' };
-function statusBadge(p, s) { return `<span class="status-badge ${SIGLE_CLASS[s]||'st-default'}">${p||'Non défini'}</span>`; }
+function statusBadge(p, s) { return `<span class="status-badge ${SIGLE_CLASS[s]||'st-default'}">${displayEtat(p)||'Non défini'}</span>`; }
+
+// ═══ BUSINESS DAYS ═══════════════════════════════════════════════════════════
+function calcBD(s, e) {
+    let c = 0; const d = new Date(s), end = new Date(e);
+    while (d <= end) { const w = d.getDay(); if (w !== 0 && w !== 6) c++; d.setDate(d.getDate() + 1); }
+    return c;
+}
+// Get effective jours: use stored jours_ouvrables if > 0, else calculate
+function effJours(c) { return (c.jours_ouvrables && c.jours_ouvrables > 0) ? c.jours_ouvrables : calcBD(c.startdate, c.enddate); }
 
 // ═══ DATA LOADING ════════════════════════════════════════════════════════════
 async function loadAll() {
@@ -70,10 +80,10 @@ function renderHero() {
     _personnel.forEach(p=>{const e=etatMap[p.id_personnel];if(!e||e.sigle==='EnFx')enFx++;else if(['EnCA','EnCC','EnCM'].includes(e.sigle))enConge++;else other++;});
     document.getElementById('hero-summary').innerHTML=
         heroCard('c1','Personnel Total',fmt(total),'Administratif en fonction','👥')+
-        heroCard('c7','En Fonction',fmt(enFx),`${total?((enFx/total)*100).toFixed(1):0}%`,'✅')+
+        heroCard('c7','Disponible',fmt(enFx),`${total?((enFx/total)*100).toFixed(1):0}%`,'✅')+
         heroCard('c3','En Congé',fmt(enConge),`${total?((enConge/total)*100).toFixed(1):0}%`,'🏖️')+
         heroCard('c5','Autres États',fmt(other),'Détachement, Mission, etc.','📋')+
-        heroCard('c6','Congés Enregistrés',fmt(_conges.length),'Toutes périodes','📅');
+        heroCard('c6','Congés Enregistrés',fmt(_conges.length),'Année en cours','📅');
 }
 
 // ═══ TAB 1: VUE GLOBALE ══════════════════════════════════════════════════════
@@ -81,7 +91,7 @@ function renderGlobal() {
     const etatMap={}; _etats.forEach(e=>{etatMap[e.id_personnel]=e;});
     const sel=document.getElementById('filter-etat-global');
     sel.innerHTML='<option value="">Tous les états</option>';
-    _parametres.forEach(p=>{sel.innerHTML+=`<option value="${p.id_parametre}">${p.parametre}</option>`;});
+    _parametres.forEach(p=>{sel.innerHTML+=`<option value="${p.id_parametre}">${displayEtat(p.parametre)}</option>`;});
 
     let html='';
     _personnel.forEach((p,i)=>{
@@ -145,8 +155,6 @@ async function saveEtat(){
 }
 
 // ═══ TAB 3: CONGÉS (ACCORDION + TABLE) ═══════════════════════════════════════
-function calcBD(s,e){let c=0;const d=new Date(s),end=new Date(e);while(d<=end){const w=d.getDay();if(w!==0&&w!==6)c++;d.setDate(d.getDate()+1);}return c;}
-
 function renderConges() {
     const container=document.getElementById('conges-accordion');
     const sel=document.getElementById('filter-conge-type');
@@ -160,11 +168,8 @@ function renderConges() {
     const sorted=Object.entries(byP).sort((a,b)=>a[1].agent.localeCompare(b[1].agent));
     let html='';
     sorted.forEach(([idP,data])=>{
-        const totalJ=data.conges.reduce((s,c)=>s+calcBD(c.startdate,c.enddate),0);
+        const totalJ=data.conges.reduce((s,c)=>s+effJours(c),0);
         const nb=data.conges.length, accId='acc-'+idP;
-
-        // Info bar
-        const infoParts=[D(data.matricule),D(data.grade_code),D(data.genre),D(data.recrutement_date)].filter(v=>v!=='—');
 
         html+=`<div class="accordion-item" data-name="${data.agent.toLowerCase()}" data-types="${data.conges.map(c=>c.id_congetype).join(',')}">
             <div class="accordion-header" onclick="toggleAccordion('${accId}')">
@@ -179,9 +184,8 @@ function renderConges() {
 
         if(!nb){html+='<div class="empty-state"><div class="empty-state-text">Aucun congé</div></div>';}
         else{
-            // Cumul par type
             const cum={};
-            data.conges.forEach(c=>{if(!cum[c.id_congetype])cum[c.id_congetype]={name:c.congename||'?',total:0,pre:c.nbrePredefini,max:c.totalJoursType};cum[c.id_congetype].total+=calcBD(c.startdate,c.enddate);});
+            data.conges.forEach(c=>{if(!cum[c.id_congetype])cum[c.id_congetype]={name:c.congename||'?',total:0,pre:c.nbrePredefini,max:c.totalJoursType};cum[c.id_congetype].total+=effJours(c);});
 
             html+='<div class="cumul-summary">';
             Object.values(cum).forEach(ct=>{
@@ -191,12 +195,11 @@ function renderConges() {
             });
             html+='</div>';
 
-            // TABLE (not cards)
             html+=`<table class="data-table" style="margin-top:8px"><thead><tr>
-                <th>Type</th><th>Date début</th><th>Date fin</th><th>Jours pris</th><th>Cumul type</th><th>Restant</th><th>Plafond</th><th>Utilisation</th>
+                <th>Type</th><th>Date début</th><th>Date fin</th><th>Jours ouvrables</th><th>Cumul type</th><th>Restant</th><th>Plafond</th><th>Utilisation</th>
             </tr></thead><tbody>`;
             data.conges.forEach(c=>{
-                const j=calcBD(c.startdate,c.enddate);
+                const j=effJours(c);
                 const cumT=cum[c.id_congetype]?cum[c.id_congetype].total:j;
                 const plaf=c.nbrePredefini?c.totalJoursType:null;
                 const reste=plaf!==null?Math.max(0,plaf-cumT):null;
@@ -236,29 +239,55 @@ function populateDropdowns(){
     const opts='<option value="">— Sélectionner —</option>'+_personnel.map(p=>`<option value="${p.id_personnel}">${p.agent}</option>`).join('');
     document.getElementById('etat-personnel').innerHTML=opts;
     document.getElementById('conge-personnel').innerHTML=opts;
-    document.getElementById('etat-parametre').innerHTML='<option value="">— Sélectionner —</option>'+_parametres.map(p=>`<option value="${p.id_parametre}">${p.parametre} (${p.sigle})</option>`).join('');
+    document.getElementById('etat-parametre').innerHTML='<option value="">— Sélectionner —</option>'+_parametres.map(p=>`<option value="${p.id_parametre}">${displayEtat(p.parametre)} (${p.sigle})</option>`).join('');
     document.getElementById('conge-type').innerHTML='<option value="">— Sélectionner —</option>'+_congeTypes.map(ct=>`<option value="${ct.id_congetype}" data-predefini="${ct.nbrePredefini}" data-total="${ct.totalJours||0}">${ct.congename}</option>`).join('');
 }
 
 // ═══ CONGÉ MODAL ═════════════════════════════════════════════════════════════
-function openCongeModal(){['conge-personnel','conge-type','conge-start','conge-end'].forEach(id=>document.getElementById(id).value='');document.getElementById('conge-plafond-info').style.display='none';openModal('modal-conge');}
+function openCongeModal(){
+    ['conge-personnel','conge-type','conge-start','conge-end'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('conge-jours').value='';
+    document.getElementById('conge-plafond-info').style.display='none';
+    openModal('modal-conge');
+}
+
+function autoCalcJours() {
+    const start = document.getElementById('conge-start').value;
+    const end = document.getElementById('conge-end').value;
+    if (start && end && new Date(start) <= new Date(end)) {
+        document.getElementById('conge-jours').value = calcBD(start, end);
+    }
+}
+
 function onCongeTypeChange(){
     const sel=document.getElementById('conge-type'),opt=sel.options[sel.selectedIndex],info=document.getElementById('conge-plafond-info');
     if(opt&&opt.dataset.predefini==='1'){info.style.display='block';document.getElementById('conge-cumul-preview').innerHTML=`<div class="cumul-chip"><span class="dot" style="background:#f59e0b"></span>Plafond: <strong>${parseInt(opt.dataset.total)||0} j.</strong></div>`;}
     else info.style.display='none';
 }
+
 async function saveConge(){
-    const idP=document.getElementById('conge-personnel').value,idCT=document.getElementById('conge-type').value,start=document.getElementById('conge-start').value,end=document.getElementById('conge-end').value;
-    if(!idP||!idCT||!start||!end){toast('⚠️ Champs requis','error');return;}
+    const idP=document.getElementById('conge-personnel').value;
+    const idCT=document.getElementById('conge-type').value;
+    const start=document.getElementById('conge-start').value;
+    const end=document.getElementById('conge-end').value;
+    const joursInput=parseInt(document.getElementById('conge-jours').value)||0;
+
+    if(!idP||!idCT||!start||!end||joursInput<1){toast('⚠️ Champs requis (y compris jours > 0)','error');return;}
     if(new Date(start)>new Date(end)){toast('⚠️ Dates invalides','error');return;}
-    const jours=calcBD(start,end);
+
+    // Check plafond using user-provided jours
     const sel=document.getElementById('conge-type'),opt=sel.options[sel.selectedIndex];
     if(opt&&opt.dataset.predefini==='1'){
         const plaf=parseInt(opt.dataset.total)||0;
-        const cum=_conges.filter(c=>c.id_personnel===+idP&&c.id_congetype===+idCT&&c.id_annee===_anneeId).reduce((s,c)=>s+calcBD(c.startdate,c.enddate),0);
-        if(cum+jours>plaf){toast(`⚠️ Plafond dépassé: ${cum}+${jours}=${cum+jours} > ${plaf}j`,'error');return;}
+        const cum=_conges.filter(c=>c.id_personnel===+idP&&c.id_congetype===+idCT).reduce((s,c)=>s+effJours(c),0);
+        if(cum+joursInput>plaf){toast(`⚠️ Plafond dépassé: ${cum}+${joursInput}=${cum+joursInput} > ${plaf}j`,'error');return;}
     }
-    try{const r=await apiPost(API+'/conges/save',{id_personnel:+idP,id_congetype:+idCT,startdate:start,enddate:end,id_annee:_anneeId});if(r.success){toast('✅ Congé enregistré','success');closeModal('modal-conge');await loadAll();}else toast('❌ '+r.error,'error');}catch(e){toast('❌ Erreur réseau','error');}
+
+    try{
+        const r=await apiPost(API+'/conges/save',{id_personnel:+idP,id_congetype:+idCT,startdate:start,enddate:end,jours_ouvrables:joursInput,id_annee:_anneeId});
+        if(r.success){toast('✅ Congé enregistré','success');closeModal('modal-conge');await loadAll();}
+        else toast('❌ '+r.error,'error');
+    }catch(e){toast('❌ Erreur réseau','error');}
 }
 
 // ═══ EXPORT PDF / EXCEL ══════════════════════════════════════════════════════
@@ -274,14 +303,14 @@ const HDR_CONGES=['Agent','Mat. ENF','Grade','Type','Début','Fin','Jours','Cumu
 
 function _globalRows(){
     const eMap={};_etats.forEach(e=>{eMap[e.id_personnel]=e;});
-    return _personnel.map((p,i)=>{const e=eMap[p.id_personnel];return[i+1,p.agent,D(p.matricule),D(p.matriculeFP),D(p.grade_code),D(p.genre),D(p.recrutement_date),e?e.parametre:'En fonction'];});
+    return _personnel.map((p,i)=>{const e=eMap[p.id_personnel];return[i+1,p.agent,D(p.matricule),D(p.matriculeFP),D(p.grade_code),D(p.genre),D(p.recrutement_date),displayEtat(e?e.parametre:'En fonction')];});
 }
-function _etatsRows(){return _etats.map((e,i)=>[i+1,e.agent,D(e.matricule),D(e.matriculeFP),D(e.grade_code),D(e.genre),D(e.recrutement_date),e.parametre,e.sigle]);}
+function _etatsRows(){return _etats.map((e,i)=>[i+1,e.agent,D(e.matricule),D(e.matriculeFP),D(e.grade_code),D(e.genre),D(e.recrutement_date),displayEtat(e.parametre),e.sigle]);}
 function _congesRows(){
     const cum={};
-    _conges.forEach(c=>{const k=c.id_personnel+'_'+c.id_congetype;if(!cum[k])cum[k]=0;cum[k]+=calcBD(c.startdate,c.enddate);});
+    _conges.forEach(c=>{const k=c.id_personnel+'_'+c.id_congetype;if(!cum[k])cum[k]=0;cum[k]+=effJours(c);});
     return _conges.map(c=>{
-        const j=calcBD(c.startdate,c.enddate),k=c.id_personnel+'_'+c.id_congetype,cumT=cum[k]||j;
+        const j=effJours(c),k=c.id_personnel+'_'+c.id_congetype,cumT=cum[k]||j;
         const plaf=c.nbrePredefini?c.totalJoursType:null,reste=plaf!==null?Math.max(0,plaf-cumT):null;
         return[c.agent,D(c.matricule),D(c.grade_code),c.congename||'?',c.startdate,c.enddate,j,cumT,reste!==null?reste:'∞',plaf!==null?plaf:'∞'];
     });

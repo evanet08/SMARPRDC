@@ -224,12 +224,16 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label" for="conge-start">Date début</label>
-                        <input type="date" class="form-control" id="conge-start">
+                        <input type="date" class="form-control" id="conge-start" onchange="autoCalcJours()">
                     </div>
                     <div class="form-group">
                         <label class="form-label" for="conge-end">Date fin</label>
-                        <input type="date" class="form-control" id="conge-end">
+                        <input type="date" class="form-control" id="conge-end" onchange="autoCalcJours()">
                     </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="conge-jours">Nombre de jours ouvrables <span style="font-weight:400;opacity:.7">(calculé auto, modifiable)</span></label>
+                    <input type="number" class="form-control" id="conge-jours" min="1" placeholder="—">
                 </div>
                 <div id="conge-plafond-info" style="display:none">
                     <div class="cumul-summary" id="conge-cumul-preview"></div>
