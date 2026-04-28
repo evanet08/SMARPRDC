@@ -402,6 +402,7 @@ def carriere_conges(request):
         LEFT JOIN personnel_conge_types ct ON ct.id_congetype = pc.id_congetype
         LEFT JOIN personnel_grade_administratif g ON g.id_grade_administratif = p.id_grade_administratif
         WHERE p.isAdministratif = 1 AND p.en_fonction = 1 AND p.id_personnel != 1
+          AND pc.id_annee = 5
         ORDER BY pc.startdate DESC
     """
     return Response(_run_stats_query(sql))
