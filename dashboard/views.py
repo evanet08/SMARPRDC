@@ -254,8 +254,11 @@ def presence_personnel_detail(request):
         # All active personnel (for absent detection)
         cursor.execute("""
             SELECT p.id_personnel,
-                   CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS agent
+                   CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS agent,
+                   p.matricule, p.matriculeFP, p.genre, p.recrutement_date,
+                   IFNULL(g.code,'—') AS grade_code
             FROM personnel p
+            LEFT JOIN personnel_grade_administratif g ON g.id_grade_administratif = p.id_grade_administratif
             WHERE p.isAdministratif = 1 AND p.en_fonction = 1 AND p.id_personnel != 1
             ORDER BY p.nom, p.postnom
         """)
@@ -344,12 +347,18 @@ def presence_personnel_detail(request):
                         extra = worked - 8 * 3600
                         overtime_s = int(extra)
                         overtime = f"{int(extra//3600)}h{int((extra%3600)//60):02d}"
-                day_list.append({'agent': pers['agent'], 'arrivee': fmt_t(fe),
+                _pinfo = {'matricule': pers.get('matricule',''), 'matriculeFP': pers.get('matriculeFP',''),
+                          'grade_code': pers.get('grade_code','—'), 'genre': pers.get('genre',''),
+                          'recrutement_date': str(pers.get('recrutement_date','') or '')}
+                day_list.append({'agent': pers['agent'], **_pinfo, 'arrivee': fmt_t(fe),
                                  'depart': fmt_t(le), 'present': present,
                                  'heures_sup': overtime, 'overtime_s': overtime_s})
             else:
                 # ABSENT — no pointage
-                day_list.append({'agent': pers['agent'], 'arrivee': '—',
+                _pinfo = {'matricule': pers.get('matricule',''), 'matriculeFP': pers.get('matriculeFP',''),
+                          'grade_code': pers.get('grade_code','—'), 'genre': pers.get('genre',''),
+                          'recrutement_date': str(pers.get('recrutement_date','') or '')}
+                day_list.append({'agent': pers['agent'], **_pinfo, 'arrivee': '—',
                                  'depart': '—', 'present': False,
                                  'heures_sup': '', 'overtime_s': 0})
 

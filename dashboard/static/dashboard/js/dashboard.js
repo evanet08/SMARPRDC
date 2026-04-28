@@ -469,10 +469,10 @@ async function loadMonthWeeks(mois) {
                         <span class="section-chevron" id="chev-${dayId}">▼</span>
                     </span>
                 </div><div class="section-body collapsed" id="${dayId}" style="margin-left:28px">
-                    <table class="pres-table"><thead><tr><th>Agent</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>H. Supp</th></tr></thead><tbody>`;
+                    <table class="pres-table"><thead><tr><th>Agent</th><th>Mat. ENF</th><th>Mat. FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>H. Supp</th></tr></thead><tbody>`;
                 day.agents.forEach(a => {
                     const b = a.present ? '<span style="color:#10b981;font-weight:700">✓ Oui</span>' : '<span style="color:#ef4444;font-weight:700">✗ Non</span>';
-                    html += `<tr><td>${a.agent}</td><td>${a.arrivee}</td><td>${a.depart}</td><td>${b}</td><td>${a.heures_sup || '—'}</td></tr>`;
+                    html += `<tr><td>${a.agent}</td><td style="font-size:.72rem">${a.matricule||'—'}</td><td style="font-size:.72rem">${a.matriculeFP||'—'}</td><td style="font-size:.72rem">${a.grade_code||'—'}</td><td>${a.genre||'—'}</td><td style="font-size:.72rem">${a.recrutement_date||'—'}</td><td>${a.arrivee}</td><td>${a.depart}</td><td>${b}</td><td>${a.heures_sup || '—'}</td></tr>`;
                 });
                 html += '</tbody></table></div>';
             });
@@ -513,7 +513,8 @@ async function loadPersonnelCumuls() {
                 totalPresent += day.presents;
                 totalExpected += day.attendus;
                 day.agents.forEach(a => {
-                    if (!agentMap[a.agent]) agentMap[a.agent] = { present: 0, absent: 0, expected: 0, overtime_s: 0 };
+                    if (!agentMap[a.agent]) agentMap[a.agent] = { present: 0, absent: 0, expected: 0, overtime_s: 0,
+                        matricule: a.matricule, matriculeFP: a.matriculeFP, grade_code: a.grade_code, genre: a.genre, recrutement_date: a.recrutement_date };
                     agentMap[a.agent].expected += 1;
                     if (a.present) agentMap[a.agent].present++;
                     else agentMap[a.agent].absent++;
@@ -526,10 +527,15 @@ async function loadPersonnelCumuls() {
         const sorted = Object.entries(agentMap).sort((a, b) => b[1].overtime_s - a[1].overtime_s);
 
         let html = `<div style="padding:8px 0;font-size:.72rem;opacity:.7">Période: ${months.length} mois — ${totalDays} jours travaillés — Taux global: ${rateBadge(totalExpected ? ((totalPresent/totalExpected)*100).toFixed(1) : 0)}</div>`;
-        html += '<table class="pres-table"><thead><tr><th>Agent</th><th>Présences</th><th>Absences</th><th>Total attendu</th><th>H. Supp cumulées</th></tr></thead><tbody>';
+        html += '<table class="pres-table"><thead><tr><th>Agent</th><th>Mat. ENF</th><th>Mat. FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Présences</th><th>Absences</th><th>Total attendu</th><th>H. Supp cumulées</th></tr></thead><tbody>';
         sorted.forEach(([name, ag]) => {
             html += `<tr>
                 <td>${name}</td>
+                <td style="font-size:.72rem">${ag.matricule||'—'}</td>
+                <td style="font-size:.72rem">${ag.matriculeFP||'—'}</td>
+                <td style="font-size:.72rem">${ag.grade_code||'—'}</td>
+                <td>${ag.genre||'—'}</td>
+                <td style="font-size:.72rem">${ag.recrutement_date||'—'}</td>
                 <td style="font-weight:600;color:#10b981">${ag.present} jour${ag.present > 1 ? 's' : ''}</td>
                 <td style="font-weight:600;color:#ef4444">${ag.absent} jour${ag.absent > 1 ? 's' : ''}</td>
                 <td>${ag.expected} jour${ag.expected > 1 ? 's' : ''}</td>
@@ -584,7 +590,7 @@ function _persRows(mois, wi, di) {
     const rows = [];
     days.forEach(day => {
         day.agents.forEach(a => {
-            rows.push([a.agent, day.jour, a.arrivee || '—', a.depart || '—', a.present ? 'Oui' : 'Non', a.heures_sup || '']);
+            rows.push([a.agent, a.matricule||'—', a.matriculeFP||'—', a.grade_code||'—', a.genre||'—', a.recrutement_date||'—', day.jour, a.arrivee || '—', a.depart || '—', a.present ? 'Oui' : 'Non', a.heures_sup || '']);
         });
     });
     return rows;
@@ -635,7 +641,7 @@ function exportPersPDF(mois, wi, di) {
     if (di !== undefined) label = _persData[mois].weeks[wi].days[di].jour;
     else if (wi !== undefined) label = _persData[mois].weeks[wi].label;
     const { doc } = _pdfDoc('Présences Personnel — ' + label);
-    doc.autoTable({ startY: 25, head: [['Agent','Date','Arrivée','Départ','Présence','Heures supp']], body: rows, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [16,185,129] } });
+    doc.autoTable({ startY: 25, head: [['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','H.Supp']], body: rows, styles: { fontSize: 6, cellPadding: 1.2 }, headStyles: { fillColor: [16,185,129] } });
     doc.save('Personnel_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf');
 }
 function exportPersXls(mois, wi, di) {
@@ -645,8 +651,8 @@ function exportPersXls(mois, wi, di) {
     if (di !== undefined) label = _persData[mois].weeks[wi].days[di].jour;
     else if (wi !== undefined) label = _persData[mois].weeks[wi].label;
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([['Agent','Date','Arrivée','Départ','Présence','Heures supp'], ...rows]);
-    ws['!cols'] = [{wch:35},{wch:12},{wch:10},{wch:10},{wch:10},{wch:12}];
+    const ws = XLSX.utils.aoa_to_sheet([['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','H.Supp'], ...rows]);
+    ws['!cols'] = [{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:12}];
     XLSX.utils.book_append_sheet(wb, ws, 'Personnel');
     XLSX.writeFile(wb, 'Personnel_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.xlsx');
 }
@@ -682,7 +688,7 @@ async function exportGlobalPDF() {
     if (allPersRows.length) {
         doc.addPage();
         doc.setFontSize(12); doc.text('Présences Personnel', 14, 15);
-        doc.autoTable({ startY: 20, head: [['Agent','Date','Arrivée','Départ','Présence','Heures supp']], body: allPersRows, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [16,185,129] } });
+        doc.autoTable({ startY: 20, head: [['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','H.Supp']], body: allPersRows, styles: { fontSize: 6, cellPadding: 1.2 }, headStyles: { fillColor: [16,185,129] } });
     }
     // Cumuls
     const tbl = document.querySelector('#pres-personnel-cumuls table');
@@ -705,8 +711,8 @@ async function exportGlobalExcel() {
     const allPersRows = [];
     Object.keys(_persData).forEach(m => { allPersRows.push(..._persRows(m)); });
     if (allPersRows.length) {
-        const ws = XLSX.utils.aoa_to_sheet([['Agent','Date','Arrivée','Départ','Présence','Heures supp'], ...allPersRows]);
-        ws['!cols'] = [{wch:35},{wch:12},{wch:10},{wch:10},{wch:10},{wch:12}];
+        const ws = XLSX.utils.aoa_to_sheet([['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','H.Supp'], ...allPersRows]);
+        ws['!cols'] = [{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:12}];
         XLSX.utils.book_append_sheet(wb, ws, 'Personnel');
     }
     const tbl = document.querySelector('#pres-personnel-cumuls table');
