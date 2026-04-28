@@ -328,3 +328,124 @@ def presence_personnel_detail(request):
                        'agents': day_list})
 
     return Response({'total_expected': expected, 'days': result})
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  CARRIÈRE — Frontend + API
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def carriere_home(request):
+    """Serve the career management page."""
+    return render(request, 'dashboard/carriere.html')
+
+
+@api_view(['GET'])
+def carriere_personnel(request):
+    """List personnel (administratif, en_fonction)."""
+    sql = """
+        SELECT p.id_personnel,
+               CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS agent,
+               p.matricule, p.genre
+        FROM personnel p
+        WHERE p.isAdministratif = 1 AND p.en_fonction = 1
+        ORDER BY p.nom, p.postnom
+    """
+    return Response(_run_stats_query(sql))
+
+
+@api_view(['GET'])
+def carriere_etats(request):
+    """Current professional states with agent info."""
+    sql = """
+        SELECT ep.id_etatpro, ep.id_personnel, ep.id_parametre,
+               CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS agent,
+               pr.parametre, pr.sigle
+        FROM personnel_etatprofessionnel ep
+        JOIN personnel p ON p.id_personnel = ep.id_personnel
+        JOIN personnel_etatprofessionnel_parametes pr ON pr.id_parametre = ep.id_parametre
+        WHERE p.isAdministratif = 1 AND p.en_fonction = 1
+        ORDER BY p.nom, p.postnom
+    """
+    return Response(_run_stats_query(sql))
+
+
+@api_view(['GET'])
+def carriere_parametres(request):
+    """List all professional state parameters."""
+    sql = "SELECT id_parametre, parametre, sigle FROM personnel_etatprofessionnel_parametes ORDER BY id_parametre"
+    return Response(_run_stats_query(sql))
+
+
+@api_view(['GET'])
+def carriere_conge_types(request):
+    """List congé types with predefined info."""
+    sql = "SELECT id_congetype, congename, nbrePredefini, totalJours FROM personnel_conge_types ORDER BY id_congetype"
+    return Response(_run_stats_query(sql))
+
+
+@api_view(['GET'])
+def carriere_conges(request):
+    """List all congés with agent and type info."""
+    sql = """
+        SELECT pc.id_conge, pc.id_personnel, pc.id_congetype, pc.startdate, pc.enddate, pc.id_annee,
+               CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS agent,
+               ct.congename, ct.nbrePredefini, ct.totalJours AS totalJoursType
+        FROM personnel_conges pc
+        JOIN personnel p ON p.id_personnel = pc.id_personnel
+        LEFT JOIN personnel_conge_types ct ON ct.id_congetype = pc.id_congetype
+        WHERE p.isAdministratif = 1 AND p.en_fonction = 1
+        ORDER BY pc.startdate DESC
+    """
+    return Response(_run_stats_query(sql))
+
+
+@api_view(['POST'])
+def carriere_etats_save(request):
+    """Upsert professional state for a personnel."""
+    import json
+    data = request.data
+    id_personnel = data.get('id_personnel')
+    id_parametre = data.get('id_parametre')
+    if not id_personnel or not id_parametre:
+        return Response({'success': False, 'error': 'Champs requis manquants'}, status=400)
+
+    with connection.cursor() as cursor:
+        # Check existing
+        cursor.execute(
+            "SELECT id_etatpro FROM personnel_etatprofessionnel WHERE id_personnel = %s",
+            [id_personnel]
+        )
+        row = cursor.fetchone()
+        if row:
+            cursor.execute(
+                "UPDATE personnel_etatprofessionnel SET id_parametre = %s WHERE id_personnel = %s",
+                [id_parametre, id_personnel]
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO personnel_etatprofessionnel (id_personnel, id_parametre) VALUES (%s, %s)",
+                [id_personnel, id_parametre]
+            )
+    return Response({'success': True})
+
+
+@api_view(['POST'])
+def carriere_conges_save(request):
+    """Create a new congé."""
+    data = request.data
+    id_personnel = data.get('id_personnel')
+    id_congetype = data.get('id_congetype')
+    startdate = data.get('startdate')
+    enddate = data.get('enddate')
+    id_annee = data.get('id_annee', 5)
+
+    if not all([id_personnel, id_congetype, startdate, enddate]):
+        return Response({'success': False, 'error': 'Champs requis manquants'}, status=400)
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """INSERT INTO personnel_conges (id_personnel, id_congetype, startdate, enddate, id_annee)
+               VALUES (%s, %s, %s, %s, %s)""",
+            [id_personnel, id_congetype, startdate, enddate, id_annee]
+        )
+    return Response({'success': True})

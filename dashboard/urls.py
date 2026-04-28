@@ -24,4 +24,15 @@ urlpatterns = [
     # ── Présences Personnel ──────────────────────────────────────────────
     path('stats/presence/personnel/summary', views.presence_personnel_summary, name='stats-presence-pers-summary'),
     path('stats/presence/personnel/detail', views.presence_personnel_detail, name='stats-presence-pers-detail'),
+
+    # ── Carrière ──────────────────────────────────────────────────────────
+    path('carriere', views.carriere_home, name='carriere-home'),
+    path('carriere/api/personnel', views.carriere_personnel, name='carriere-personnel'),
+    path('carriere/api/etats', views.carriere_etats, name='carriere-etats'),
+    path('carriere/api/parametres', views.carriere_parametres, name='carriere-parametres'),
+    path('carriere/api/conge-types', views.carriere_conge_types, name='carriere-conge-types'),
+    path('carriere/api/conges', views.carriere_conges, name='carriere-conges'),
+    path('carriere/api/etats/save', views.carriere_etats_save, name='carriere-etats-save'),
+    path('carriere/api/conges/save', views.carriere_conges_save, name='carriere-conges-save'),
 ]
+

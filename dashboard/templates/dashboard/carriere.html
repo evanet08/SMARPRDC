@@ -1,0 +1,242 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMARPRDC — Gestion de Carrière</title>
+    <meta name="description" content="Gestion de la carrière du personnel — États professionnels et congés — SMARPRDC ENF.">
+    <meta name="robots" content="noindex, nofollow">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💼</text></svg>">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="{% static 'dashboard/css/carriere.css' %}">
+</head>
+<body>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  HEADER                                                            -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <header class="header" id="main-header">
+        <div class="header-inner">
+            <div class="header-brand">
+                <div class="header-logo">SM</div>
+                <div>
+                    <div class="header-title">SMARPRDC — Carrière</div>
+                    <div class="header-subtitle">Gestion des États Professionnels & Congés</div>
+                </div>
+            </div>
+            <div class="header-meta">
+                <a href="/" class="header-badge" title="Retour au tableau de bord">
+                    📊 Tableau de bord
+                </a>
+                <div class="header-badge">
+                    <span class="pulse-dot"></span>
+                    <span>Données en direct</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  TOAST CONTAINER                                                   -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  MAIN CONTENT                                                      -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="main-container">
+
+        <!-- LOADER -->
+        <div id="main-loader">
+            <div class="loading-center">
+                <div class="spinner"></div>
+                <p class="loading-text">Chargement des données carrière…</p>
+            </div>
+        </div>
+
+        <!-- CONTENT (hidden until loaded) -->
+        <div id="main-content" style="display:none">
+
+            <!-- ═══ HERO KPI CARDS ═══ -->
+            <div class="stats-hero" id="hero-summary"></div>
+
+            <!-- ═══ TAB NAVIGATION ═══ -->
+            <div class="tab-nav" id="tab-nav">
+                <button class="tab-btn active" data-tab="tab-global" onclick="switchTab('tab-global', this)" id="btn-tab-global">
+                    <span>👁️</span> Vue Globale
+                </button>
+                <button class="tab-btn" data-tab="tab-etats" onclick="switchTab('tab-etats', this)" id="btn-tab-etats">
+                    <span>📋</span> États Professionnels
+                </button>
+                <button class="tab-btn" data-tab="tab-conges" onclick="switchTab('tab-conges', this)" id="btn-tab-conges">
+                    <span>🏖️</span> Congés
+                </button>
+            </div>
+
+            <!-- ═══ TAB 1: VUE GLOBALE ═══ -->
+            <div class="tab-panel active" id="tab-global">
+                <div class="search-bar">
+                    <input type="text" class="search-input" id="search-global" placeholder="🔍 Rechercher un agent…" oninput="filterGlobal()">
+                    <select class="filter-select" id="filter-etat-global" onchange="filterGlobal()">
+                        <option value="">Tous les états</option>
+                    </select>
+                </div>
+                <div class="table-card">
+                    <div class="table-card-header">
+                        <div class="table-card-title">
+                            <span>👥</span> Personnel & État Professionnel Actuel
+                        </div>
+                        <span class="table-card-count" id="count-global">—</span>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="data-table" id="table-global">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Nom complet</th>
+                                    <th>Matricule</th>
+                                    <th>Genre</th>
+                                    <th>État professionnel</th>
+                                    <th>Depuis</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-global"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ TAB 2: ÉTATS PROFESSIONNELS ═══ -->
+            <div class="tab-panel" id="tab-etats">
+                <div class="search-bar">
+                    <input type="text" class="search-input" id="search-etats" placeholder="🔍 Rechercher un agent…" oninput="filterEtats()">
+                    <button class="btn btn-primary" onclick="openEtatModal()" id="btn-affecter-etat">
+                        ➕ Affecter un état
+                    </button>
+                </div>
+                <div class="table-card">
+                    <div class="table-card-header">
+                        <div class="table-card-title">
+                            <span>📋</span> Historique des États Professionnels
+                        </div>
+                        <span class="table-card-count" id="count-etats">—</span>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="data-table" id="table-etats">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Agent</th>
+                                    <th>État</th>
+                                    <th>Sigle</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-etats"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ TAB 3: CONGÉS ═══ -->
+            <div class="tab-panel" id="tab-conges">
+                <div class="search-bar">
+                    <input type="text" class="search-input" id="search-conges" placeholder="🔍 Rechercher un agent…" oninput="filterConges()">
+                    <select class="filter-select" id="filter-conge-type" onchange="filterConges()">
+                        <option value="">Tous les types</option>
+                    </select>
+                    <button class="btn btn-success" onclick="openCongeModal()" id="btn-ajouter-conge">
+                        ➕ Nouveau congé
+                    </button>
+                </div>
+                <div id="conges-accordion"></div>
+            </div>
+
+        </div><!-- /main-content -->
+    </div><!-- /main-container -->
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  MODAL: AFFECTER ÉTAT                                              -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="modal-etat">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title"><span>📋</span> Affecter un État Professionnel</div>
+                <button class="modal-close" onclick="closeModal('modal-etat')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label" for="etat-personnel">Agent</label>
+                    <select class="form-control" id="etat-personnel"></select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="etat-parametre">État professionnel</label>
+                    <select class="form-control" id="etat-parametre"></select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal('modal-etat')">Annuler</button>
+                <button class="btn btn-primary" onclick="saveEtat()" id="btn-save-etat">💾 Enregistrer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  MODAL: NOUVEAU CONGÉ                                              -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="modal-conge">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title"><span>🏖️</span> Nouveau Congé</div>
+                <button class="modal-close" onclick="closeModal('modal-conge')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label" for="conge-personnel">Agent</label>
+                    <select class="form-control" id="conge-personnel"></select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="conge-type">Type de congé</label>
+                    <select class="form-control" id="conge-type" onchange="onCongeTypeChange()"></select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="conge-start">Date début</label>
+                        <input type="date" class="form-control" id="conge-start">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="conge-end">Date fin</label>
+                        <input type="date" class="form-control" id="conge-end">
+                    </div>
+                </div>
+                <div id="conge-plafond-info" style="display:none">
+                    <div class="cumul-summary" id="conge-cumul-preview"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal('modal-conge')">Annuler</button>
+                <button class="btn btn-success" onclick="saveConge()" id="btn-save-conge">💾 Enregistrer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  FOOTER                                                            -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <footer class="footer" id="main-footer">
+        <p class="footer-text">
+            © 2026 <a href="https://enf.smaprdc.pro">SMARPRDC</a> —
+            Système de Management et d'Analyse des Ressources ·
+            Propulsé par <strong>ICT Group</strong>
+        </p>
+    </footer>
+
+    <!-- Carrière Engine -->
+    <script src="{% static 'dashboard/js/carriere.js' %}"></script>
+
+</body>
+</html>
