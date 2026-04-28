@@ -339,6 +339,9 @@ async function loadCarriereStats() {
     if (_statsLoaded) return;
     _statsLoaded = true;
 
+    // Load presence data in parallel
+    loadCarrierePresence();
+
     // Destroy previous charts if any
     _statsCharts.forEach(c => { try { c.destroy(); } catch(e) {} });
     _statsCharts = [];
@@ -422,6 +425,112 @@ async function loadCarriereStats() {
         c.render(); _statsCharts.push(c);
     } catch(e) {
         document.getElementById('wrap-stats-etat').innerHTML = '<div style="text-align:center;color:#ef4444;padding:40px">Erreur</div>';
+    }
+}
+
+// ═══ PRÉSENCES / ABSENCES ════════════════════════════════════════════════════
+const MOIS_FR = {1:'Janvier',2:'Février',3:'Mars',4:'Avril',5:'Mai',6:'Juin',7:'Juillet',8:'Août',9:'Septembre',10:'Octobre',11:'Novembre',12:'Décembre'};
+function fmtOT(s){if(!s)return'—';const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return`${h}h${m<10?'0':''}${m}`;}
+function rateBadge(t){const c=t>=75?'#10b981':t>=50?'#f59e0b':'#ef4444';return`<strong style="color:${c}">${t}%</strong>`;}
+
+function toggleSec(id){
+    const el=document.getElementById(id);
+    if(!el)return;
+    el.classList.toggle('collapsed');
+    const ch=document.getElementById('chev-'+id);
+    if(ch)ch.classList.toggle('open');
+}
+
+let _presLoaded=false;
+async function loadCarrierePresence(){
+    if(_presLoaded)return;
+    _presLoaded=true;
+    const wrap=document.getElementById('carr-pres-wrap');
+    const cumWrap=document.getElementById('carr-cumuls-wrap');
+    try{
+        const months=await fetch('/stats/presence/personnel/summary').then(r=>r.json());
+        if(!months.length){wrap.innerHTML='<div class="empty-state"><div class="empty-state-text">Aucune donnée de présence</div></div>';cumWrap.innerHTML=wrap.innerHTML;return;}
+
+        // Monthly accordion
+        let html='';
+        months.forEach((row,mi)=>{
+            const parts=row.mois.split('-');
+            const label=MOIS_FR[parseInt(parts[1])]+' '+parts[0];
+            const mId='carr-m-'+mi;
+            html+=`<div class="subsection-title" onclick="toggleSec('${mId}');loadCarrMonth('${row.mois}','${mId}')" style="margin-top:6px">
+                <span class="sec-icon">📅</span> ${label}
+                <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+                    <span id="carr-ms-${row.mois}" style="font-size:.75rem"></span>
+                    <span class="section-chevron" id="chev-${mId}">▼</span>
+                </span>
+            </div><div class="section-body collapsed" id="${mId}">
+                <div id="carr-md-${row.mois}" data-loaded="0"><div class="chart-loading"><div class="spinner"></div></div></div>
+            </div>`;
+        });
+        wrap.innerHTML=html;
+        document.getElementById('pres-period-info').textContent=months.length+' mois';
+
+        // Cumuls: fetch all months
+        const allData=await Promise.all(months.map(m=>fetch('/stats/presence/personnel/detail?mois='+m.mois).then(r=>r.json())));
+        const agentMap={};
+        let tExp=0,tPres=0,tDays=0;
+        allData.forEach(raw=>{raw.days.forEach(day=>{tDays++;tPres+=day.presents;tExp+=day.attendus;
+            day.agents.forEach(a=>{
+                if(!agentMap[a.agent])agentMap[a.agent]={present:0,absent:0,expected:0,overtime_s:0,matricule:a.matricule,matriculeFP:a.matriculeFP,grade_code:a.grade_code,genre:a.genre,recrutement_date:a.recrutement_date};
+                agentMap[a.agent].expected+=1;if(a.present)agentMap[a.agent].present++;else agentMap[a.agent].absent++;
+                agentMap[a.agent].overtime_s+=(a.overtime_s||0);
+            });
+        });});
+        const sorted=Object.entries(agentMap).sort((a,b)=>b[1].overtime_s-a[1].overtime_s);
+        let ch=`<div style="padding:6px 0;font-size:.72rem;opacity:.7">Période: ${months.length} mois — ${tDays} jours — Taux: ${rateBadge(tExp?((tPres/tExp)*100).toFixed(1):0)}</div>`;
+        ch+='<table class="pres-table"><thead><tr><th>Agent</th><th>Mat.ENF</th><th>Mat.FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Présences</th><th>Absences</th><th>Attendu</th><th>H.Supp</th></tr></thead><tbody>';
+        sorted.forEach(([name,ag])=>{
+            ch+=`<tr><td>${name}</td><td style="font-size:.72rem">${ag.matricule||'—'}</td><td style="font-size:.72rem">${ag.matriculeFP||'—'}</td><td style="font-size:.72rem">${ag.grade_code||'—'}</td><td>${ag.genre||'—'}</td><td style="font-size:.72rem">${ag.recrutement_date||'—'}</td>
+                <td style="font-weight:600;color:#10b981">${ag.present}j</td><td style="font-weight:600;color:#ef4444">${ag.absent}j</td><td>${ag.expected}j</td><td style="font-weight:700">${fmtOT(ag.overtime_s)}</td></tr>`;
+        });
+        ch+='</tbody></table>';
+        cumWrap.innerHTML=ch;
+    }catch(e){
+        console.error('[Carrière] Presence:',e);
+        wrap.innerHTML='<div style="color:#ef4444;padding:20px">Erreur de chargement</div>';
+        cumWrap.innerHTML=wrap.innerHTML;
+    }
+}
+
+async function loadCarrMonth(mois,secId){
+    const container=document.getElementById('carr-md-'+mois);
+    if(!container||container.dataset.loaded==='1')return;
+    container.dataset.loaded='1';
+    try{
+        const raw=await fetch('/stats/presence/personnel/detail?mois='+mois).then(r=>r.json());
+        const days=raw.days;
+        let mP=0,mAtt=0;
+        days.forEach(d=>{mP+=d.presents;mAtt+=d.attendus;});
+        const mRate=mAtt?((mP/mAtt)*100).toFixed(1):0;
+        const ms=document.getElementById('carr-ms-'+mois);
+        if(ms)ms.innerHTML='— '+rateBadge(mRate);
+
+        let html='';
+        days.forEach((day,di)=>{
+            const dayId=`carr-day-${mois}-${di}`;
+            html+=`<div class="subsection-title" onclick="toggleSec('${dayId}')" style="margin-top:4px;margin-left:12px;font-size:.76rem;background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
+                <span class="sec-icon">📋</span> ${day.jour}
+                <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+                    <span style="font-size:.72rem">✅ ${day.presents} · ❌ ${day.absents} — ${rateBadge(day.taux)}</span>
+                    <span class="section-chevron" id="chev-${dayId}">▼</span>
+                </span>
+            </div><div class="section-body collapsed" id="${dayId}" style="margin-left:12px">
+                <table class="pres-table"><thead><tr><th>Agent</th><th>Mat.ENF</th><th>Mat.FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>H.Supp</th></tr></thead><tbody>`;
+            day.agents.forEach(a=>{
+                const b=a.present?'<span style="color:#10b981;font-weight:700">✓</span>':'<span style="color:#ef4444;font-weight:700">✗</span>';
+                html+=`<tr><td>${a.agent}</td><td style="font-size:.72rem">${a.matricule||'—'}</td><td style="font-size:.72rem">${a.matriculeFP||'—'}</td><td style="font-size:.72rem">${a.grade_code||'—'}</td><td>${a.genre||'—'}</td><td style="font-size:.72rem">${a.recrutement_date||'—'}</td><td>${a.arrivee}</td><td>${a.depart}</td><td>${b}</td><td>${a.heures_sup||'—'}</td></tr>`;
+            });
+            html+='</tbody></table></div>';
+        });
+        container.innerHTML=html;
+    }catch(e){
+        console.error('[Carrière] Month:',e);
+        container.innerHTML='<span style="color:#ef4444">Erreur</span>';
     }
 }
 
