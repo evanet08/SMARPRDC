@@ -13,6 +13,11 @@
 
     <!-- Styles -->
     <link rel="stylesheet" href="{% static 'dashboard/css/carriere.css' %}">
+
+    <!-- Export: jsPDF + autoTable + SheetJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -84,6 +89,8 @@
                     <select class="filter-select" id="filter-etat-global" onchange="filterGlobal()">
                         <option value="">Tous les états</option>
                     </select>
+                    <button class="btn btn-primary" onclick="exportPDF('global')" id="btn-export-global-pdf">📄 Export PDF</button>
+                    <button class="btn btn-success" onclick="exportExcel('global')" id="btn-export-global-xls">📗 Export Excel</button>
                 </div>
                 <div class="table-card">
                     <div class="table-card-header">
@@ -98,10 +105,12 @@
                                 <tr>
                                     <th>#</th>
                                     <th>Nom complet</th>
-                                    <th>Matricule</th>
+                                    <th>Mat. ENF</th>
+                                    <th>Mat. FP</th>
+                                    <th>Grade Admin.</th>
                                     <th>Genre</th>
+                                    <th>Embauche ENF</th>
                                     <th>État professionnel</th>
-                                    <th>Depuis</th>
                                 </tr>
                             </thead>
                             <tbody id="tbody-global"></tbody>
@@ -117,6 +126,8 @@
                     <button class="btn btn-primary" onclick="openEtatModal()" id="btn-affecter-etat">
                         ➕ Affecter un état
                     </button>
+                    <button class="btn btn-primary" onclick="exportPDF('etats')" id="btn-export-etats-pdf">📄 Export PDF</button>
+                    <button class="btn btn-success" onclick="exportExcel('etats')" id="btn-export-etats-xls">📗 Export Excel</button>
                 </div>
                 <div class="table-card">
                     <div class="table-card-header">
@@ -131,6 +142,11 @@
                                 <tr>
                                     <th>#</th>
                                     <th>Agent</th>
+                                    <th>Mat. ENF</th>
+                                    <th>Mat. FP</th>
+                                    <th>Grade Admin.</th>
+                                    <th>Genre</th>
+                                    <th>Embauche ENF</th>
                                     <th>État</th>
                                     <th>Sigle</th>
                                     <th>Actions</th>
@@ -152,6 +168,8 @@
                     <button class="btn btn-success" onclick="openCongeModal()" id="btn-ajouter-conge">
                         ➕ Nouveau congé
                     </button>
+                    <button class="btn btn-primary" onclick="exportPDF('conges')" id="btn-export-conges-pdf">📄 Export PDF</button>
+                    <button class="btn btn-success" onclick="exportExcel('conges')" id="btn-export-conges-xls">📗 Export Excel</button>
                 </div>
                 <div id="conges-accordion"></div>
             </div>
@@ -229,9 +247,9 @@
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <footer class="footer" id="main-footer">
         <p class="footer-text">
-            © 2026 <a href="https://enf.smaprdc.pro">SMARPRDC</a> —
+            © 2026 <a href="https://enf.smaprdc.pro">SMAPRDC</a> —
             Système de Management et d'Analyse des Ressources ·
-            Propulsé par <strong>ICT Group</strong>
+            Propulsé par <strong>NEXORA TECH</strong>
         </p>
     </footer>
 

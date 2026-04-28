@@ -128,7 +128,7 @@ def personnel_genre(request):
     sql = """
         SELECT IFNULL(p.genre,'N/A') AS label, COUNT(*) AS value
         FROM personnel p
-        WHERE p.isAdministratif = 1 AND p.en_fonction = 1
+        WHERE p.isAdministratif = 1 AND p.en_fonction = 1 AND p.id_personnel != 1
         GROUP BY p.genre
     """
     return Response(_run_stats_query(sql))
@@ -142,7 +142,7 @@ def personnel_grade(request):
         FROM personnel p
         LEFT JOIN personnel_grade_administratif g
             ON p.id_grade_administratif = g.id_grade_administratif
-        WHERE p.isAdministratif = 1 AND p.en_fonction = 1
+        WHERE p.isAdministratif = 1 AND p.en_fonction = 1 AND p.id_personnel != 1
         GROUP BY g.code
     """
     return Response(_run_stats_query(sql))
@@ -219,7 +219,7 @@ def presence_personnel_summary(request):
         SELECT DISTINCT CONCAT(YEAR(pp.date_pointage), '-', LPAD(MONTH(pp.date_pointage),2,'0')) AS mois
         FROM personnel_pointage pp
         JOIN personnel p ON p.id_personnel = pp.id_personnel
-        WHERE p.isAdministratif = 1 AND p.en_fonction = 1
+        WHERE p.isAdministratif = 1 AND p.en_fonction = 1 AND p.id_personnel != 1
         ORDER BY mois DESC
     """
     with connection.cursor() as cursor:
@@ -249,7 +249,7 @@ def presence_personnel_detail(request):
         cursor.execute("SELECT id_coupon, heureD FROM personnel_pointage_coupon")
         coupon_map = {r[0]: r[1] for r in cursor.fetchall()}
 
-        cursor.execute("SELECT COUNT(*) FROM personnel WHERE isAdministratif=1 AND en_fonction=1")
+        cursor.execute("SELECT COUNT(*) FROM personnel WHERE isAdministratif=1 AND en_fonction=1 AND id_personnel != 1")
         expected = cursor.fetchone()[0] or 0
 
         cursor.execute("""
@@ -259,7 +259,7 @@ def presence_personnel_detail(request):
                 pp.type_pointage, pp.id_coupon
             FROM personnel_pointage pp
             JOIN personnel p ON p.id_personnel = pp.id_personnel
-            WHERE p.isAdministratif = 1 AND p.en_fonction = 1
+            WHERE p.isAdministratif = 1 AND p.en_fonction = 1 AND p.id_personnel != 1
               AND CONCAT(YEAR(pp.date_pointage), '-', LPAD(MONTH(pp.date_pointage),2,'0')) = %s
             ORDER BY pp.date_pointage
         """, [mois])
@@ -345,9 +345,11 @@ def carriere_personnel(request):
     sql = """
         SELECT p.id_personnel,
                CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS agent,
-               p.matricule, p.genre
+               p.matricule, p.matriculeFP, p.genre, p.recrutement_date,
+               IFNULL(g.code,'—') AS grade_code
         FROM personnel p
-        WHERE p.isAdministratif = 1 AND p.en_fonction = 1
+        LEFT JOIN personnel_grade_administratif g ON g.id_grade_administratif = p.id_grade_administratif
+        WHERE p.isAdministratif = 1 AND p.en_fonction = 1 AND p.id_personnel != 1
         ORDER BY p.nom, p.postnom
     """
     return Response(_run_stats_query(sql))
@@ -359,11 +361,14 @@ def carriere_etats(request):
     sql = """
         SELECT ep.id_etatpro, ep.id_personnel, ep.id_parametre,
                CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS agent,
+               p.matricule, p.matriculeFP, p.genre, p.recrutement_date,
+               IFNULL(g.code,'—') AS grade_code,
                pr.parametre, pr.sigle
         FROM personnel_etatprofessionnel ep
         JOIN personnel p ON p.id_personnel = ep.id_personnel
         JOIN personnel_etatprofessionnel_parametes pr ON pr.id_parametre = ep.id_parametre
-        WHERE p.isAdministratif = 1 AND p.en_fonction = 1
+        LEFT JOIN personnel_grade_administratif g ON g.id_grade_administratif = p.id_grade_administratif
+        WHERE p.isAdministratif = 1 AND p.en_fonction = 1 AND p.id_personnel != 1
         ORDER BY p.nom, p.postnom
     """
     return Response(_run_stats_query(sql))
@@ -389,11 +394,14 @@ def carriere_conges(request):
     sql = """
         SELECT pc.id_conge, pc.id_personnel, pc.id_congetype, pc.startdate, pc.enddate, pc.id_annee,
                CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS agent,
+               p.matricule, p.matriculeFP, p.genre, p.recrutement_date,
+               IFNULL(g.code,'—') AS grade_code,
                ct.congename, ct.nbrePredefini, ct.totalJours AS totalJoursType
         FROM personnel_conges pc
         JOIN personnel p ON p.id_personnel = pc.id_personnel
         LEFT JOIN personnel_conge_types ct ON ct.id_congetype = pc.id_congetype
-        WHERE p.isAdministratif = 1 AND p.en_fonction = 1
+        LEFT JOIN personnel_grade_administratif g ON g.id_grade_administratif = p.id_grade_administratif
+        WHERE p.isAdministratif = 1 AND p.en_fonction = 1 AND p.id_personnel != 1
         ORDER BY pc.startdate DESC
     """
     return Response(_run_stats_query(sql))
