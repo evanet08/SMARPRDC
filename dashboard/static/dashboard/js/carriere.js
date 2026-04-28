@@ -331,5 +331,99 @@ function exportExcel(section){
     XLSX.writeFile(wb,'SMAPRDC_'+section+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
 
+// ═══ TAB 4: STATISTIQUES (ApexCharts) ════════════════════════════════════════
+let _statsLoaded = false;
+let _statsCharts = [];
+
+async function loadCarriereStats() {
+    if (_statsLoaded) return;
+    _statsLoaded = true;
+
+    // Destroy previous charts if any
+    _statsCharts.forEach(c => { try { c.destroy(); } catch(e) {} });
+    _statsCharts = [];
+
+    // 1) Genre chart (pie)
+    try {
+        const data = await fetch('/stats/personnel/genre').then(r => r.json());
+        const total = data.reduce((s, d) => s + d.value, 0);
+        const wrap = document.getElementById('wrap-stats-genre');
+        const badge = document.getElementById('badge-stats-genre');
+        if (badge) badge.textContent = fmt(total);
+        wrap.innerHTML = '<div id="apex-genre"></div>';
+        const c = new ApexCharts(document.querySelector('#apex-genre'), {
+            chart: { type: 'pie', height: 300, toolbar: { show: false } },
+            series: data.map(d => d.value),
+            labels: data.map(d => d.label || 'N/A'),
+            colors: ['#3b82f6', '#ec4899', '#94a3b8', '#64748b'],
+            dataLabels: { enabled: true, formatter: v => v.toFixed(1) + '%', style: { fontSize: '13px', fontWeight: 700 }, dropShadow: { enabled: false } },
+            legend: { position: 'bottom', fontSize: '12px', fontWeight: 600 },
+            tooltip: { y: { formatter: v => fmt(v) + ' agents' } }
+        });
+        c.render(); _statsCharts.push(c);
+    } catch(e) {
+        document.getElementById('wrap-stats-genre').innerHTML = '<div style="text-align:center;color:#ef4444;padding:40px">Erreur</div>';
+    }
+
+    // 2) Grade chart (bar)
+    try {
+        const data = await fetch('/stats/personnel/grade').then(r => r.json());
+        const total = data.reduce((s, d) => s + d.value, 0);
+        const wrap = document.getElementById('wrap-stats-grade');
+        const badge = document.getElementById('badge-stats-grade');
+        if (badge) badge.textContent = fmt(total);
+        wrap.innerHTML = '<div id="apex-grade"></div>';
+        const c = new ApexCharts(document.querySelector('#apex-grade'), {
+            chart: { type: 'bar', height: 300, toolbar: { show: false } },
+            series: [{ name: 'Effectif', data: data.map(d => d.value) }],
+            xaxis: { categories: data.map(d => d.label || 'N/A'), labels: { style: { fontSize: '10px' } } },
+            colors: ['#f43f5e'],
+            plotOptions: { bar: { borderRadius: 6, columnWidth: '55%', distributed: true } },
+            dataLabels: { enabled: true, style: { fontSize: '11px', fontWeight: 700 } },
+            legend: { show: false },
+            tooltip: { y: { formatter: v => fmt(v) + ' agents' } }
+        });
+        c.render(); _statsCharts.push(c);
+    } catch(e) {
+        document.getElementById('wrap-stats-grade').innerHTML = '<div style="text-align:center;color:#ef4444;padding:40px">Erreur</div>';
+    }
+
+    // 3) État professionnel chart (from already loaded data)
+    try {
+        const etatMap = {};
+        _etats.forEach(e => {
+            const label = displayEtat(e.parametre);
+            if (!etatMap[label]) etatMap[label] = 0;
+            etatMap[label]++;
+        });
+        // Add "Disponible" for personnel without état
+        const assignedIds = new Set(_etats.map(e => e.id_personnel));
+        let disponible = 0;
+        _personnel.forEach(p => { if (!assignedIds.has(p.id_personnel)) disponible++; });
+        if (disponible > 0) etatMap['Disponible'] = (etatMap['Disponible'] || 0) + disponible;
+
+        const labels = Object.keys(etatMap);
+        const values = Object.values(etatMap);
+        const total = values.reduce((s, v) => s + v, 0);
+        const wrap = document.getElementById('wrap-stats-etat');
+        const badge = document.getElementById('badge-stats-etat');
+        if (badge) badge.textContent = fmt(total);
+        wrap.innerHTML = '<div id="apex-etat"></div>';
+        const colors = ['#10b981','#3b82f6','#8b5cf6','#f59e0b','#ec4899','#ef4444','#06b6d4','#64748b','#f43f5e'];
+        const c = new ApexCharts(document.querySelector('#apex-etat'), {
+            chart: { type: 'donut', height: 300, toolbar: { show: false } },
+            series: values,
+            labels: labels,
+            colors: colors.slice(0, labels.length),
+            dataLabels: { enabled: true, formatter: v => v.toFixed(1) + '%', style: { fontSize: '12px', fontWeight: 700 }, dropShadow: { enabled: false } },
+            legend: { position: 'bottom', fontSize: '12px', fontWeight: 600 },
+            tooltip: { y: { formatter: v => fmt(v) + ' agents' } }
+        });
+        c.render(); _statsCharts.push(c);
+    } catch(e) {
+        document.getElementById('wrap-stats-etat').innerHTML = '<div style="text-align:center;color:#ef4444;padding:40px">Erreur</div>';
+    }
+}
+
 // ═══ INIT ════════════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', loadAll);

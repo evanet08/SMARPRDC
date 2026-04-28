@@ -18,6 +18,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 </head>
 <body>
 
@@ -79,6 +80,9 @@
                 </button>
                 <button class="tab-btn" data-tab="tab-conges" onclick="switchTab('tab-conges', this)" id="btn-tab-conges">
                     <span>🏖️</span> Congés
+                </button>
+                <button class="tab-btn" data-tab="tab-stats" onclick="switchTab('tab-stats', this);loadCarriereStats()" id="btn-tab-stats">
+                    <span>📊</span> Statistiques
                 </button>
             </div>
 
@@ -172,6 +176,39 @@
                     <button class="btn btn-success" onclick="exportExcel('conges')" id="btn-export-conges-xls">📗 Export Excel</button>
                 </div>
                 <div id="conges-accordion"></div>
+            </div>
+
+            <!-- ═══ TAB 4: STATISTIQUES ═══ -->
+            <div class="tab-panel" id="tab-stats">
+                <div class="stats-grid">
+                    <div class="chart-card" id="c-stats-genre">
+                        <div class="chart-card-header">
+                            <div class="chart-card-title"><span>♂♀</span> Répartition par Genre</div>
+                            <span class="card-badge" id="badge-stats-genre">—</span>
+                        </div>
+                        <div class="chart-wrap" id="wrap-stats-genre">
+                            <div class="chart-loading"><div class="spinner"></div></div>
+                        </div>
+                    </div>
+                    <div class="chart-card" id="c-stats-grade">
+                        <div class="chart-card-header">
+                            <div class="chart-card-title"><span>🏅</span> Par Grade Administratif</div>
+                            <span class="card-badge" id="badge-stats-grade">—</span>
+                        </div>
+                        <div class="chart-wrap" id="wrap-stats-grade">
+                            <div class="chart-loading"><div class="spinner"></div></div>
+                        </div>
+                    </div>
+                    <div class="chart-card" id="c-stats-etat">
+                        <div class="chart-card-header">
+                            <div class="chart-card-title"><span>📋</span> Par État Professionnel</div>
+                            <span class="card-badge" id="badge-stats-etat">—</span>
+                        </div>
+                        <div class="chart-wrap" id="wrap-stats-etat">
+                            <div class="chart-loading"><div class="spinner"></div></div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
         </div><!-- /main-content -->
