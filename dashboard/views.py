@@ -227,23 +227,6 @@ def presence_personnel_summary(request):
         return Response(_dictfetchall(cursor))
 
 
-def _ensure_justificatifs_table():
-    """Create the justificatifs table if it doesn't exist (idempotent)."""
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS personnel_pointage_justificatifs (
-                id_justificatif INT AUTO_INCREMENT PRIMARY KEY,
-                id_personnel    INT NOT NULL,
-                date_absence    DATE NOT NULL,
-                justifie        TINYINT(1) NOT NULL DEFAULT 0,
-                motif           VARCHAR(500) DEFAULT NULL,
-                created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY uk_pers_date (id_personnel, date_absence)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        """)
-
-
 @api_view(['GET'])
 def presence_personnel_detail(request):
     """Per-day individual entries for a given month — includes absent agents + justifications."""
@@ -254,8 +237,6 @@ def presence_personnel_detail(request):
     mois = request.GET.get('mois', '')
     if not mois:
         return Response({'error': 'Paramètre mois requis'}, status=400)
-
-    _ensure_justificatifs_table()
 
     with connection.cursor() as cursor:
         cursor.execute("SELECT valeur FROM personnel_pointage_retardacademique LIMIT 1")
@@ -303,11 +284,13 @@ def presence_personnel_detail(request):
         """, [mois])
         rows = _dictfetchall(cursor)
 
-        # Load justifications for this month
+        # Load justifications for this month (via id_coupon → date_coupon)
         cursor.execute("""
-            SELECT id_justificatif, id_personnel, date_absence, justifie, motif
-            FROM personnel_pointage_justificatifs
-            WHERE CONCAT(YEAR(date_absence), '-', LPAD(MONTH(date_absence),2,'0')) = %s
+            SELECT j.id_justificatif, j.id_personnel, c.date_coupon AS date_absence,
+                   j.justifie, j.motif
+            FROM personnel_pointage_justificatifs j
+            JOIN personnel_pointage_coupon c ON c.id_coupon = j.id_coupon
+            WHERE CONCAT(YEAR(c.date_coupon), '-', LPAD(MONTH(c.date_coupon),2,'0')) = %s
         """, [mois])
         just_rows = _dictfetchall(cursor)
 
@@ -554,12 +537,14 @@ def carriere_conges_save(request):
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  JUSTIFICATIFS — CRUD for absence justifications
+#  Table schema: (id_justificatif, id_personnel, id_coupon, motif, justifie, id_user)
+#  id_coupon → personnel_pointage_coupon.date_coupon (the absence date)
+#  id_user  → the connected user who validated the justification
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @api_view(['POST'])
 def justificatif_save(request):
     """Upsert an absence justification (justifié/non justifié + motif)."""
-    _ensure_justificatifs_table()
     data = request.data
     id_personnel = data.get('id_personnel')
     date_absence = data.get('date_absence')
@@ -570,9 +555,20 @@ def justificatif_save(request):
         return Response({'success': False, 'error': 'Champs requis manquants'}, status=400)
 
     with connection.cursor() as cursor:
+        # Find the coupon for this date
         cursor.execute(
-            "SELECT id_justificatif FROM personnel_pointage_justificatifs WHERE id_personnel = %s AND date_absence = %s",
-            [id_personnel, date_absence]
+            "SELECT id_coupon FROM personnel_pointage_coupon WHERE date_coupon = %s LIMIT 1",
+            [date_absence]
+        )
+        coupon_row = cursor.fetchone()
+        if not coupon_row:
+            return Response({'success': False, 'error': 'Aucun coupon trouvé pour cette date'}, status=404)
+        id_coupon = coupon_row[0]
+
+        # Check if justification already exists for this personnel + coupon
+        cursor.execute(
+            "SELECT id_justificatif FROM personnel_pointage_justificatifs WHERE id_personnel = %s AND id_coupon = %s",
+            [id_personnel, id_coupon]
         )
         row = cursor.fetchone()
         if row:
@@ -583,9 +579,9 @@ def justificatif_save(request):
             return Response({'success': True, 'id_justificatif': row[0], 'action': 'updated'})
         else:
             cursor.execute(
-                """INSERT INTO personnel_pointage_justificatifs (id_personnel, date_absence, justifie, motif)
-                   VALUES (%s, %s, %s, %s)""",
-                [id_personnel, date_absence, justifie, motif]
+                """INSERT INTO personnel_pointage_justificatifs (id_personnel, id_coupon, motif, justifie, id_user)
+                   VALUES (%s, %s, %s, %s, %s)""",
+                [id_personnel, id_coupon, motif, justifie, 1]
             )
             return Response({'success': True, 'id_justificatif': cursor.lastrowid, 'action': 'created'})
 
@@ -593,7 +589,6 @@ def justificatif_save(request):
 @api_view(['GET'])
 def justificatif_history(request):
     """Return absence history for a given agent (with justification status)."""
-    _ensure_justificatifs_table()
     id_personnel = request.GET.get('id_personnel')
     if not id_personnel:
         return Response({'error': 'id_personnel requis'}, status=400)
@@ -610,12 +605,13 @@ def justificatif_history(request):
         """, [id_personnel])
         pers_info = _dictfetchall(cursor)
 
-        # Get all justifications for this agent
+        # Get all justifications for this agent (via coupon → date)
         cursor.execute("""
-            SELECT id_justificatif, date_absence, justifie, motif
-            FROM personnel_pointage_justificatifs
-            WHERE id_personnel = %s
-            ORDER BY date_absence DESC
+            SELECT j.id_justificatif, c.date_coupon AS date_absence, j.justifie, j.motif
+            FROM personnel_pointage_justificatifs j
+            JOIN personnel_pointage_coupon c ON c.id_coupon = j.id_coupon
+            WHERE j.id_personnel = %s
+            ORDER BY c.date_coupon DESC
         """, [id_personnel])
         justificatifs = _dictfetchall(cursor)
 
@@ -628,29 +624,32 @@ def justificatif_history(request):
 @api_view(['GET'])
 def justificatifs_list(request):
     """List all justifications for a given month (or all)."""
-    _ensure_justificatifs_table()
     mois = request.GET.get('mois', '')
 
     with connection.cursor() as cursor:
         if mois:
             cursor.execute("""
-                SELECT j.id_justificatif, j.id_personnel, j.date_absence, j.justifie, j.motif,
+                SELECT j.id_justificatif, j.id_personnel, c.date_coupon AS date_absence,
+                       j.justifie, j.motif,
                        CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS agent,
                        p.matricule, IFNULL(g.code,'—') AS grade_code
                 FROM personnel_pointage_justificatifs j
+                JOIN personnel_pointage_coupon c ON c.id_coupon = j.id_coupon
                 JOIN personnel p ON p.id_personnel = j.id_personnel
                 LEFT JOIN personnel_grade_administratif g ON g.id_grade_administratif = p.id_grade_administratif
-                WHERE CONCAT(YEAR(j.date_absence), '-', LPAD(MONTH(j.date_absence),2,'0')) = %s
-                ORDER BY j.date_absence DESC, p.nom
+                WHERE CONCAT(YEAR(c.date_coupon), '-', LPAD(MONTH(c.date_coupon),2,'0')) = %s
+                ORDER BY c.date_coupon DESC, p.nom
             """, [mois])
         else:
             cursor.execute("""
-                SELECT j.id_justificatif, j.id_personnel, j.date_absence, j.justifie, j.motif,
+                SELECT j.id_justificatif, j.id_personnel, c.date_coupon AS date_absence,
+                       j.justifie, j.motif,
                        CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS agent,
                        p.matricule, IFNULL(g.code,'—') AS grade_code
                 FROM personnel_pointage_justificatifs j
+                JOIN personnel_pointage_coupon c ON c.id_coupon = j.id_coupon
                 JOIN personnel p ON p.id_personnel = j.id_personnel
                 LEFT JOIN personnel_grade_administratif g ON g.id_grade_administratif = p.id_grade_administratif
-                ORDER BY j.date_absence DESC, p.nom
+                ORDER BY c.date_coupon DESC, p.nom
             """)
         return Response(_dictfetchall(cursor))
