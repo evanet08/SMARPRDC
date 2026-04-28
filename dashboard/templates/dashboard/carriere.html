@@ -216,7 +216,9 @@
                         <div class="table-card-title">
                             <span>📅</span> Présences & Absences Personnel
                         </div>
-                        <span class="table-card-count" id="pres-period-info">—</span>
+                        <div style="display:flex;align-items:center;gap:8px">
+                            <span class="table-card-count" id="pres-period-info">—</span>
+                        </div>
                     </div>
                     <div style="padding:16px" id="carr-pres-wrap">
                         <div class="chart-loading"><div class="spinner"></div></div>
@@ -228,6 +230,10 @@
                     <div class="table-card-header">
                         <div class="table-card-title">
                             <span>⏱️</span> Cumuls Heures Supplémentaires
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px">
+                            <button class="btn btn-primary btn-sm" onclick="exportCumulsCarrPDF()" id="btn-exp-cum-pdf">📄 PDF</button>
+                            <button class="btn btn-success btn-sm" onclick="exportCumulsCarrXls()" id="btn-exp-cum-xls">📗 Excel</button>
                         </div>
                     </div>
                     <div style="padding:16px" id="carr-cumuls-wrap">

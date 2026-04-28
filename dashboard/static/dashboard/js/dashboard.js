@@ -524,7 +524,7 @@ async function loadPersonnelCumuls() {
         });
 
         // Sort by overtime desc
-        const sorted = Object.entries(agentMap).sort((a, b) => b[1].overtime_s - a[1].overtime_s);
+        const sorted = Object.entries(agentMap).sort((a, b) => a[0].localeCompare(b[0]));
 
         let html = `<div style="padding:8px 0;font-size:.72rem;opacity:.7">Période: ${months.length} mois — ${totalDays} jours travaillés — Taux global: ${rateBadge(totalExpected ? ((totalPresent/totalExpected)*100).toFixed(1) : 0)}</div>`;
         html += '<table class="pres-table"><thead><tr><th>Agent</th><th>Mat. ENF</th><th>Mat. FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Présences</th><th>Absences</th><th>Total attendu</th><th>H. Supp cumulées</th></tr></thead><tbody>';

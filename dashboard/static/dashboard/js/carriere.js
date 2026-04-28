@@ -124,8 +124,9 @@ function filterGlobal() {
 // ═══ TAB 2: ÉTATS PROFESSIONNELS ═════════════════════════════════════════════
 function renderEtats() {
     const tbody=document.getElementById('tbody-etats'); let html='';
-    if(!_etats.length){html='<tr><td colspan="10" class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-text">Aucun état affecté</div></td></tr>';}
-    else _etats.forEach((e,i)=>{
+    const sorted=[..._etats].sort((a,b)=>(a.agent||'').localeCompare(b.agent||''));
+    if(!sorted.length){html='<tr><td colspan="10" class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-text">Aucun état affecté</div></td></tr>';}
+    else sorted.forEach((e,i)=>{
         html+=`<tr data-name="${(e.agent||'').toLowerCase()}">
             <td style="font-weight:600;color:var(--text-muted);font-size:.72rem">${i+1}</td>
             <td style="font-weight:600">${e.agent}</td>
@@ -481,7 +482,7 @@ async function loadCarrierePresence(){
                 agentMap[a.agent].overtime_s+=(a.overtime_s||0);
             });
         });});
-        const sorted=Object.entries(agentMap).sort((a,b)=>b[1].overtime_s-a[1].overtime_s);
+        const sorted=Object.entries(agentMap).sort((a,b)=>a[0].localeCompare(b[0]));
         let ch=`<div style="padding:6px 0;font-size:.72rem;opacity:.7">Période: ${months.length} mois — ${tDays} jours — Taux: ${rateBadge(tExp?((tPres/tExp)*100).toFixed(1):0)}</div>`;
         ch+='<table class="pres-table"><thead><tr><th>Agent</th><th>Mat.ENF</th><th>Mat.FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Présences</th><th>Absences</th><th>Attendu</th><th>H.Supp</th></tr></thead><tbody>';
         sorted.forEach(([name,ag])=>{
@@ -532,6 +533,24 @@ async function loadCarrMonth(mois,secId){
         console.error('[Carrière] Month:',e);
         container.innerHTML='<span style="color:#ef4444">Erreur</span>';
     }
+}
+// ═══ EXPORT CUMULS (STATS TAB) ═══════════════════════════════════════════════
+function exportCumulsCarrPDF(){
+    const tbl=document.querySelector('#carr-cumuls-wrap table');
+    if(!tbl)return;
+    const {jsPDF}=window.jspdf,doc=new jsPDF('l','mm','a4');
+    doc.setFontSize(14);doc.text('SMAPRDC — Cumuls Heures Supplémentaires',14,15);
+    doc.setFontSize(8);doc.text('Généré le '+new Date().toLocaleDateString('fr-FR'),14,21);
+    doc.autoTable({html:tbl,startY:25,styles:{fontSize:6,cellPadding:1.2},headStyles:{fillColor:[245,158,11]}});
+    doc.save('SMAPRDC_Cumuls_'+new Date().toISOString().slice(0,10)+'.pdf');
+}
+function exportCumulsCarrXls(){
+    const tbl=document.querySelector('#carr-cumuls-wrap table');
+    if(!tbl)return;
+    const wb=XLSX.utils.book_new(),ws=XLSX.utils.table_to_sheet(tbl);
+    ws['!cols']=[{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:12},{wch:10},{wch:10},{wch:10},{wch:12}];
+    XLSX.utils.book_append_sheet(wb,ws,'Cumuls');
+    XLSX.writeFile(wb,'SMAPRDC_Cumuls_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
 
 // ═══ INIT ════════════════════════════════════════════════════════════════════

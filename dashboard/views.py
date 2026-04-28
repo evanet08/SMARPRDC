@@ -362,12 +362,8 @@ def presence_personnel_detail(request):
                                  'depart': '—', 'present': False,
                                  'heures_sup': '', 'overtime_s': 0})
 
-        # Sort: present first (by arrival), then absent (alphabetical)
-        presents = [a for a in day_list if a['present']]
-        absents = [a for a in day_list if not a['present']]
-        presents.sort(key=lambda x: x['arrivee'] if x['arrivee'] != '—' else 'z')
-        absents.sort(key=lambda x: x['agent'])
-        day_list = presents + absents
+        # Sort alphabetically by agent name
+        day_list.sort(key=lambda x: x['agent'])
 
         p = sum(1 for a in day_list if a['present'])
         result.append({'jour': jour, 'presents': p, 'absents': expected - p,
