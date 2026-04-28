@@ -593,18 +593,28 @@ async function loadCarrMonth(mois){
 
             w.days.forEach((day,di)=>{
                 const dayId=`carr-d-${mois}-${wi}-${di}`;
+                const justCount = day.justifies || 0;
                 html+=`<div class="subsection-title" onclick="toggleSec('${dayId}')" style="margin-top:3px;margin-left:28px;font-size:.74rem;background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
                     <span class="sec-icon">📋</span> ${day.jour}
                     <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
-                        <span style="font-size:.72rem">✅ ${day.presents} · ❌ ${day.absents} — ${rateBadge(day.taux)}</span>
+                        <span style="font-size:.72rem">✅ ${day.presents} · ❌ ${day.absents}${justCount > 0 ? ' (📝' + justCount + ' just.)' : ''} — ${rateBadge(day.taux)}</span>
                         ${expBtnsC("exportCarrPresPDF('"+mois+"',"+wi+","+di+")","exportCarrPresXls('"+mois+"',"+wi+","+di+")")}
                         <span class="section-chevron" id="chev-${dayId}">▼</span>
                     </span>
                 </div><div class="section-body collapsed" id="${dayId}" style="margin-left:28px">
-                    <table class="pres-table"><thead><tr><th>Agent</th><th>Mat.ENF</th><th>Mat.FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>H.Supp</th></tr></thead><tbody>`;
+                    <table class="pres-table"><thead><tr><th>Agent</th><th>Mat.ENF</th><th>Mat.FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>Justifié</th><th>H.Supp</th></tr></thead><tbody>`;
                 day.agents.forEach(a=>{
                     const b=a.present?'<span style="color:#10b981;font-weight:700">✓</span>':'<span style="color:#ef4444;font-weight:700">✗</span>';
-                    html+=`<tr><td>${a.agent}</td><td style="font-size:.72rem">${a.matricule||'—'}</td><td style="font-size:.72rem">${a.matriculeFP||'—'}</td><td style="font-size:.72rem">${a.grade_code||'—'}</td><td>${a.genre||'—'}</td><td style="font-size:.72rem">${a.recrutement_date||'—'}</td><td>${a.arrivee}</td><td>${a.depart}</td><td>${b}</td><td>${a.heures_sup||'—'}</td></tr>`;
+                    let justCol = '—';
+                    if (!a.present) {
+                        if (a.justifie) {
+                            const safeMotif = (a.motif||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+                            justCol = '<span style="color:#3b82f6;font-weight:700;cursor:pointer" title="' + (a.motif||'').replace(/"/g,'&quot;') + '" onclick="event.stopPropagation();openJustModal(' + a.id_personnel + ',\'' + day.jour + '\',true,\'' + safeMotif + '\')">✓ Oui</span>';
+                        } else {
+                            justCol = '<span style="color:#f59e0b;font-weight:700;cursor:pointer" onclick="event.stopPropagation();openJustModal(' + a.id_personnel + ',\'' + day.jour + '\',false,\'\')">✗ Non</span>';
+                        }
+                    }
+                    html+=`<tr><td>${a.agent}</td><td style="font-size:.72rem">${a.matricule||'—'}</td><td style="font-size:.72rem">${a.matriculeFP||'—'}</td><td style="font-size:.72rem">${a.grade_code||'—'}</td><td>${a.genre||'—'}</td><td style="font-size:.72rem">${a.recrutement_date||'—'}</td><td>${a.arrivee}</td><td>${a.depart}</td><td>${b}</td><td>${justCol}</td><td>${a.heures_sup||'—'}</td></tr>`;
                 });
                 html+='</tbody></table></div>';
             });
@@ -632,6 +642,66 @@ function exportCumulsCarrXls(){
     ws['!cols']=[{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:12},{wch:10},{wch:10},{wch:10},{wch:12}];
     XLSX.utils.book_append_sheet(wb,ws,'Cumuls');
     XLSX.writeFile(wb,'SMAPRDC_Cumuls_'+new Date().toISOString().slice(0,10)+'.xlsx');
+}
+
+// ═══ JUSTIFICATION MODAL (reused from dashboard) ════════════════════════════
+function _getCsrf(){const c=document.cookie.match(/csrftoken=([^;]+)/);return c?c[1]:'';}
+
+function openJustModal(idP,dateAbs,isJust,motif){
+    let existing=document.getElementById('just-modal-overlay');
+    if(existing)existing.remove();
+    const overlay=document.createElement('div');
+    overlay.id='just-modal-overlay';
+    overlay.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML=`
+        <div style="background:#fff;border-radius:16px;width:420px;max-width:95vw;box-shadow:0 24px 48px rgba(0,0,0,.2);overflow:hidden;">
+            <div style="padding:16px 20px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;font-weight:700;font-size:.88rem;display:flex;align-items:center;gap:8px">
+                <span>📝</span> Justificatif d'absence
+                <button onclick="document.getElementById('just-modal-overlay').remove()" style="margin-left:auto;background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer">✕</button>
+            </div>
+            <div style="padding:20px">
+                <div style="margin-bottom:12px;font-size:.78rem;color:#64748b">Agent ID: <strong>${idP}</strong> — Date: <strong>${dateAbs}</strong></div>
+                <div style="margin-bottom:14px">
+                    <label style="font-size:.78rem;font-weight:600;display:block;margin-bottom:6px">Statut</label>
+                    <select id="just-statut" style="width:100%;padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:.82rem">
+                        <option value="0" ${!isJust?'selected':''}>Non justifié</option>
+                        <option value="1" ${isJust?'selected':''}>Justifié</option>
+                    </select>
+                </div>
+                <div id="just-motif-wrap" style="${isJust?'':'display:none'}">
+                    <label style="font-size:.78rem;font-weight:600;display:block;margin-bottom:6px">Motif</label>
+                    <textarea id="just-motif" rows="3" style="width:100%;padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:.82rem;resize:vertical">${motif||''}</textarea>
+                </div>
+            </div>
+            <div style="padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid #e2e8f0">
+                <button onclick="document.getElementById('just-modal-overlay').remove()" style="padding:8px 16px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;cursor:pointer;font-size:.78rem">Annuler</button>
+                <button onclick="saveJustification(${idP},'${dateAbs}')" style="padding:8px 16px;border:none;border-radius:8px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;cursor:pointer;font-weight:700;font-size:.78rem">💾 Enregistrer</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+    document.getElementById('just-statut').addEventListener('change',function(){
+        document.getElementById('just-motif-wrap').style.display=this.value==='1'?'':'none';
+    });
+}
+
+async function saveJustification(idP,dateAbs){
+    const justifie=document.getElementById('just-statut').value==='1';
+    const motif=document.getElementById('just-motif')?.value||'';
+    try{
+        const res=await fetch('/stats/presence/justificatif/save',{
+            method:'POST',
+            headers:{'Content-Type':'application/json','X-CSRFToken':_getCsrf()},
+            body:JSON.stringify({id_personnel:idP,date_absence:dateAbs,justifie,motif})
+        });
+        const data=await res.json();
+        if(data.success){
+            document.getElementById('just-modal-overlay')?.remove();
+            // Force reload the stats tab
+            const mois=dateAbs.substring(0,7);
+            const cont=document.getElementById('carr-month-'+mois);
+            if(cont){cont.dataset.loaded='0';loadCarrMonth(mois);}
+        }
+    }catch(e){console.error('[Carrière] Justification save:',e);}
 }
 
 // ═══ INIT ════════════════════════════════════════════════════════════════════

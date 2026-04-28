@@ -1,5 +1,5 @@
 /**
- * SMARPRDC Dashboard — ApexCharts Rendering Engine
+ * SMAPRDC Dashboard — ApexCharts Rendering Engine
  * Inspired by eSchoolStructure accueil/tableaux tab.
  * Fetches data from Django API and renders ApexCharts.
  */
@@ -241,7 +241,7 @@ async function loadChart(config) {
         const total = data.reduce((s, d) => s + d.value, 0);
         return { section: config.section, total };
     } catch (err) {
-        console.error(`[SMARPRDC] Error ${config.endpoint}:`, err);
+        console.error(`[SMAPRDC] Error ${config.endpoint}:`, err);
         showError(config.id, 'Erreur de chargement');
         return { section: config.section, total: 0 };
     }
@@ -350,7 +350,7 @@ async function loadNestedPresence() {
         });
         container.innerHTML = html;
     } catch(e) {
-        console.error('[SMARPRDC] Nested presence:', e);
+        console.error('[SMAPRDC] Nested presence:', e);
         container.innerHTML = '<div class="chart-error"><span class="chart-error-text">Erreur de chargement</span></div>';
     }
 }
@@ -401,7 +401,7 @@ async function loadPresencePersonnel() {
         });
         wrap.innerHTML = html;
     } catch(e) {
-        console.error('[SMARPRDC] Presence personnel:', e);
+        console.error('[SMAPRDC] Presence personnel:', e);
         wrap.innerHTML = '<div class="chart-error"><span class="chart-error-text">Erreur de chargement</span></div>';
     }
 }
@@ -436,7 +436,6 @@ async function loadMonthWeeks(mois) {
             weeks[w.key].attendus += day.attendus;
         });
 
-        // Store for exports
         const sortedWeeks = Object.entries(weeks).sort((a, b) => a[0].localeCompare(b[0]));
         _persData[mois] = { days, weeks: sortedWeeks.map(([k, w]) => w) };
 
@@ -461,18 +460,28 @@ async function loadMonthWeeks(mois) {
 
             w.days.forEach((day, di) => {
                 const dayId = `pers-d-${mois}-${wi}-${di}`;
+                const justCount = day.justifies || 0;
                 html += `<div class="subsection-title" onclick="toggleSection('${dayId}')" style="margin-top:3px;margin-left:28px;font-size:.74rem;background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
                     <span class="sec-icon">📋</span> ${day.jour}
                     <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
-                        <span style="font-size:.72rem">— ${rateBadge(day.taux)}</span>
+                        <span style="font-size:.72rem">✅ ${day.presents} · ❌ ${day.absents}${justCount > 0 ? ' (📝' + justCount + ' just.)' : ''} — ${rateBadge(day.taux)}</span>
                         ${expBtns(`exportPersPDF('${mois}',${wi},${di})`, `exportPersXls('${mois}',${wi},${di})`)}
                         <span class="section-chevron" id="chev-${dayId}">▼</span>
                     </span>
                 </div><div class="section-body collapsed" id="${dayId}" style="margin-left:28px">
-                    <table class="pres-table"><thead><tr><th>Agent</th><th>Mat. ENF</th><th>Mat. FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>H. Supp</th></tr></thead><tbody>`;
+                    <table class="pres-table"><thead><tr><th>Agent</th><th>Mat. ENF</th><th>Mat. FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>Justifié</th><th>H. Supp</th></tr></thead><tbody>`;
                 day.agents.forEach(a => {
                     const b = a.present ? '<span style="color:#10b981;font-weight:700">✓ Oui</span>' : '<span style="color:#ef4444;font-weight:700">✗ Non</span>';
-                    html += `<tr><td>${a.agent}</td><td style="font-size:.72rem">${a.matricule||'—'}</td><td style="font-size:.72rem">${a.matriculeFP||'—'}</td><td style="font-size:.72rem">${a.grade_code||'—'}</td><td>${a.genre||'—'}</td><td style="font-size:.72rem">${a.recrutement_date||'—'}</td><td>${a.arrivee}</td><td>${a.depart}</td><td>${b}</td><td>${a.heures_sup || '—'}</td></tr>`;
+                    let justCol = '—';
+                    if (!a.present) {
+                        if (a.justifie) {
+                            const safeMotif = (a.motif||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+                            justCol = '<span style="color:#3b82f6;font-weight:700;cursor:pointer" title="' + (a.motif||'').replace(/"/g,'&quot;') + '" onclick="event.stopPropagation();openJustModal(' + a.id_personnel + ',\'' + day.jour + '\',true,\'' + safeMotif + '\')">✓ Oui</span>';
+                        } else {
+                            justCol = '<span style="color:#f59e0b;font-weight:700;cursor:pointer" onclick="event.stopPropagation();openJustModal(' + a.id_personnel + ',\'' + day.jour + '\',false,\'\')">✗ Non</span>';
+                        }
+                    }
+                    html += `<tr><td>${a.agent}</td><td style="font-size:.72rem">${a.matricule||'—'}</td><td style="font-size:.72rem">${a.matriculeFP||'—'}</td><td style="font-size:.72rem">${a.grade_code||'—'}</td><td>${a.genre||'—'}</td><td style="font-size:.72rem">${a.recrutement_date||'—'}</td><td>${a.arrivee}</td><td>${a.depart}</td><td>${b}</td><td>${justCol}</td><td>${a.heures_sup || '—'}</td></tr>`;
                 });
                 html += '</tbody></table></div>';
             });
@@ -480,9 +489,71 @@ async function loadMonthWeeks(mois) {
         });
         container.innerHTML = html;
     } catch(e) {
-        console.error('[SMARPRDC] Month detail:', e);
+        console.error('[SMAPRDC] Month detail:', e);
         container.innerHTML = '<span style="color:#ef4444">Erreur de chargement</span>';
     }
+}
+
+// ── Justification Modal (inline in dashboard) ───────────────────────────────
+
+function _getCsrf() { const c = document.cookie.match(/csrftoken=([^;]+)/); return c ? c[1] : ''; }
+
+function openJustModal(idP, dateAbs, isJust, motif) {
+    let existing = document.getElementById('just-modal-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'just-modal-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `
+        <div style="background:#fff;border-radius:16px;width:420px;max-width:95vw;box-shadow:0 24px 48px rgba(0,0,0,.2);overflow:hidden;">
+            <div style="padding:16px 20px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;font-weight:700;font-size:.88rem;display:flex;align-items:center;gap:8px">
+                <span>📝</span> Justificatif d'absence
+                <button onclick="document.getElementById('just-modal-overlay').remove()" style="margin-left:auto;background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer">✕</button>
+            </div>
+            <div style="padding:20px">
+                <div style="margin-bottom:12px;font-size:.78rem;color:#64748b">Agent ID: <strong>${idP}</strong> — Date: <strong>${dateAbs}</strong></div>
+                <div style="margin-bottom:14px">
+                    <label style="font-size:.78rem;font-weight:600;display:block;margin-bottom:6px">Statut</label>
+                    <select id="just-statut" style="width:100%;padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:.82rem">
+                        <option value="0" ${!isJust?'selected':''}>Non justifié</option>
+                        <option value="1" ${isJust?'selected':''}>Justifié</option>
+                    </select>
+                </div>
+                <div id="just-motif-wrap" style="${isJust?'':'display:none'}">
+                    <label style="font-size:.78rem;font-weight:600;display:block;margin-bottom:6px">Motif</label>
+                    <textarea id="just-motif" rows="3" style="width:100%;padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:.82rem;resize:vertical">${motif||''}</textarea>
+                </div>
+            </div>
+            <div style="padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid #e2e8f0">
+                <button onclick="document.getElementById('just-modal-overlay').remove()" style="padding:8px 16px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;cursor:pointer;font-size:.78rem">Annuler</button>
+                <button onclick="saveJustification(${idP},'${dateAbs}')" style="padding:8px 16px;border:none;border-radius:8px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;cursor:pointer;font-weight:700;font-size:.78rem">💾 Enregistrer</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+
+    document.getElementById('just-statut').addEventListener('change', function() {
+        document.getElementById('just-motif-wrap').style.display = this.value === '1' ? '' : 'none';
+    });
+}
+
+async function saveJustification(idP, dateAbs) {
+    const justifie = document.getElementById('just-statut').value === '1';
+    const motif = document.getElementById('just-motif')?.value || '';
+    try {
+        const res = await fetch('/stats/presence/justificatif/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _getCsrf() },
+            body: JSON.stringify({ id_personnel: idP, date_absence: dateAbs, justifie, motif })
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('just-modal-overlay')?.remove();
+            const mois = dateAbs.substring(0, 7);
+            const cont = document.getElementById('pers-month-' + mois);
+            if (cont) { cont.dataset.loaded = '0'; loadMonthWeeks(mois); }
+        }
+    } catch(e) { console.error('[SMAPRDC] Justification save:', e); }
 }
 
 // ── Cumuls Heures Supplémentaires (independent summary) ─────────────────────
@@ -545,7 +616,7 @@ async function loadPersonnelCumuls() {
         html += '</tbody></table>';
         container.innerHTML = html;
     } catch(e) {
-        console.error('[SMARPRDC] Cumuls:', e);
+        console.error('[SMAPRDC] Cumuls:', e);
         container.innerHTML = '<span style="color:#ef4444">Erreur de chargement</span>';
     }
 }
@@ -590,7 +661,9 @@ function _persRows(mois, wi, di) {
     const rows = [];
     days.forEach(day => {
         day.agents.forEach(a => {
-            rows.push([a.agent, a.matricule||'—', a.matriculeFP||'—', a.grade_code||'—', a.genre||'—', a.recrutement_date||'—', day.jour, a.arrivee || '—', a.depart || '—', a.present ? 'Oui' : 'Non', a.heures_sup || '']);
+            let justLabel = '—';
+            if (!a.present) justLabel = a.justifie ? 'Oui' : 'Non';
+            rows.push([a.agent, a.matricule||'—', a.matriculeFP||'—', a.grade_code||'—', a.genre||'—', a.recrutement_date||'—', day.jour, a.arrivee || '—', a.depart || '—', a.present ? 'Oui' : 'Non', justLabel, a.motif || '', a.heures_sup || '']);
         });
     });
     return rows;
@@ -600,7 +673,7 @@ function _pdfDoc(title) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('l', 'mm', 'a4');
     const now = new Date().toLocaleDateString('fr-FR');
-    doc.setFontSize(14); doc.text('SMARPRDC — ' + title, 14, 15);
+    doc.setFontSize(14); doc.text('SMAPRDC — ' + title, 14, 15);
     doc.setFontSize(8); doc.text('Généré le ' + now, 14, 21);
     return { doc, now };
 }
@@ -641,7 +714,7 @@ function exportPersPDF(mois, wi, di) {
     if (di !== undefined) label = _persData[mois].weeks[wi].days[di].jour;
     else if (wi !== undefined) label = _persData[mois].weeks[wi].label;
     const { doc } = _pdfDoc('Présences Personnel — ' + label);
-    doc.autoTable({ startY: 25, head: [['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','H.Supp']], body: rows, styles: { fontSize: 6, cellPadding: 1.2 }, headStyles: { fillColor: [16,185,129] } });
+    doc.autoTable({ startY: 25, head: [['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','Justifié','Motif','H.Supp']], body: rows, styles: { fontSize: 6, cellPadding: 1.2 }, headStyles: { fillColor: [16,185,129] } });
     doc.save('Personnel_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf');
 }
 function exportPersXls(mois, wi, di) {
@@ -651,8 +724,8 @@ function exportPersXls(mois, wi, di) {
     if (di !== undefined) label = _persData[mois].weeks[wi].days[di].jour;
     else if (wi !== undefined) label = _persData[mois].weeks[wi].label;
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','H.Supp'], ...rows]);
-    ws['!cols'] = [{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:12}];
+    const ws = XLSX.utils.aoa_to_sheet([['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','Justifié','Motif','H.Supp'], ...rows]);
+    ws['!cols'] = [{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:25},{wch:12}];
     XLSX.utils.book_append_sheet(wb, ws, 'Personnel');
     XLSX.writeFile(wb, 'Personnel_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.xlsx');
 }
@@ -688,7 +761,7 @@ async function exportGlobalPDF() {
     if (allPersRows.length) {
         doc.addPage();
         doc.setFontSize(12); doc.text('Présences Personnel', 14, 15);
-        doc.autoTable({ startY: 20, head: [['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','H.Supp']], body: allPersRows, styles: { fontSize: 6, cellPadding: 1.2 }, headStyles: { fillColor: [16,185,129] } });
+        doc.autoTable({ startY: 20, head: [['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','Justifié','Motif','H.Supp']], body: allPersRows, styles: { fontSize: 6, cellPadding: 1.2 }, headStyles: { fillColor: [16,185,129] } });
     }
     // Cumuls
     const tbl = document.querySelector('#pres-personnel-cumuls table');
@@ -697,7 +770,7 @@ async function exportGlobalPDF() {
         doc.setFontSize(12); doc.text('Cumuls Heures Supplémentaires', 14, 15);
         doc.autoTable({ html: tbl, startY: 20, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [245,158,11] } });
     }
-    doc.save('SMARPRDC_Presences_' + now.replace(/\//g, '-') + '.pdf');
+    doc.save('SMAPRDC_Presences_' + now.replace(/\//g, '-') + '.pdf');
 }
 
 async function exportGlobalExcel() {
@@ -711,8 +784,8 @@ async function exportGlobalExcel() {
     const allPersRows = [];
     Object.keys(_persData).forEach(m => { allPersRows.push(..._persRows(m)); });
     if (allPersRows.length) {
-        const ws = XLSX.utils.aoa_to_sheet([['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','H.Supp'], ...allPersRows]);
-        ws['!cols'] = [{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:12}];
+        const ws = XLSX.utils.aoa_to_sheet([['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','Justifié','Motif','H.Supp'], ...allPersRows]);
+        ws['!cols'] = [{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:25},{wch:12}];
         XLSX.utils.book_append_sheet(wb, ws, 'Personnel');
     }
     const tbl = document.querySelector('#pres-personnel-cumuls table');
@@ -722,7 +795,7 @@ async function exportGlobalExcel() {
         XLSX.utils.book_append_sheet(wb, ws, 'Cumuls');
     }
     const now = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
-    XLSX.writeFile(wb, 'SMARPRDC_Presences_' + now + '.xlsx');
+    XLSX.writeFile(wb, 'SMAPRDC_Presences_' + now + '.xlsx');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

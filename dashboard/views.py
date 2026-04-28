@@ -1,5 +1,5 @@
 """
-API views for the SMARPRDC statistics dashboard.
+API views for the SMAPRDC statistics dashboard.
 All queries use raw SQL adapted to the actual db_rdc_enf schema.
 """
 
@@ -227,9 +227,26 @@ def presence_personnel_summary(request):
         return Response(_dictfetchall(cursor))
 
 
+def _ensure_justificatifs_table():
+    """Create the justificatifs table if it doesn't exist (idempotent)."""
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS personnel_pointage_justificatifs (
+                id_justificatif INT AUTO_INCREMENT PRIMARY KEY,
+                id_personnel    INT NOT NULL,
+                date_absence    DATE NOT NULL,
+                justifie        TINYINT(1) NOT NULL DEFAULT 0,
+                motif           VARCHAR(500) DEFAULT NULL,
+                created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_pers_date (id_personnel, date_absence)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """)
+
+
 @api_view(['GET'])
 def presence_personnel_detail(request):
-    """Per-day individual entries for a given month — includes absent agents."""
+    """Per-day individual entries for a given month — includes absent agents + justifications."""
     from collections import OrderedDict
     from datetime import timedelta, date
     import calendar
@@ -237,6 +254,8 @@ def presence_personnel_detail(request):
     mois = request.GET.get('mois', '')
     if not mois:
         return Response({'error': 'Paramètre mois requis'}, status=400)
+
+    _ensure_justificatifs_table()
 
     with connection.cursor() as cursor:
         cursor.execute("SELECT valeur FROM personnel_pointage_retardacademique LIMIT 1")
@@ -283,6 +302,24 @@ def presence_personnel_detail(request):
             ORDER BY pp.date_pointage
         """, [mois])
         rows = _dictfetchall(cursor)
+
+        # Load justifications for this month
+        cursor.execute("""
+            SELECT id_justificatif, id_personnel, date_absence, justifie, motif
+            FROM personnel_pointage_justificatifs
+            WHERE CONCAT(YEAR(date_absence), '-', LPAD(MONTH(date_absence),2,'0')) = %s
+        """, [mois])
+        just_rows = _dictfetchall(cursor)
+
+    # Build justification lookup: (id_personnel, date_str) -> {...}
+    just_map = {}
+    for jr in just_rows:
+        key = f"{jr['id_personnel']}|{jr['date_absence']}"
+        just_map[key] = {
+            'id_justificatif': jr['id_justificatif'],
+            'justifie': bool(jr['justifie']),
+            'motif': jr['motif'] or ''
+        }
 
     def parse_t(t):
         if isinstance(t, timedelta):
@@ -332,6 +369,9 @@ def presence_personnel_detail(request):
         day_list = []
         for pers in all_personnel:
             aid = pers['id_personnel']
+            _pinfo = {'id_personnel': aid, 'matricule': pers.get('matricule',''), 'matriculeFP': pers.get('matriculeFP',''),
+                      'grade_code': pers.get('grade_code','—'), 'genre': pers.get('genre',''),
+                      'recrutement_date': str(pers.get('recrutement_date','') or '')}
             if aid in pointage_day:
                 info = pointage_day[aid]
                 fe = min(info['entries']) if info['entries'] else None
@@ -353,26 +393,27 @@ def presence_personnel_detail(request):
                         extra = worked - 8 * 3600
                         overtime_s = int(extra)
                         overtime = f"{int(extra//3600)}h{int((extra%3600)//60):02d}"
-                _pinfo = {'matricule': pers.get('matricule',''), 'matriculeFP': pers.get('matriculeFP',''),
-                          'grade_code': pers.get('grade_code','—'), 'genre': pers.get('genre',''),
-                          'recrutement_date': str(pers.get('recrutement_date','') or '')}
                 day_list.append({'agent': pers['agent'], **_pinfo, 'arrivee': fmt_t(fe),
                                  'depart': fmt_t(le), 'present': present,
-                                 'heures_sup': overtime, 'overtime_s': overtime_s})
+                                 'heures_sup': overtime, 'overtime_s': overtime_s,
+                                 'justifie': None, 'motif': '', 'id_justificatif': None})
             else:
-                # ABSENT — no pointage
-                _pinfo = {'matricule': pers.get('matricule',''), 'matriculeFP': pers.get('matriculeFP',''),
-                          'grade_code': pers.get('grade_code','—'), 'genre': pers.get('genre',''),
-                          'recrutement_date': str(pers.get('recrutement_date','') or '')}
+                # ABSENT — include justification data
+                jk = f"{aid}|{jour}"
+                jdata = just_map.get(jk, {'id_justificatif': None, 'justifie': False, 'motif': ''})
                 day_list.append({'agent': pers['agent'], **_pinfo, 'arrivee': '—',
                                  'depart': '—', 'present': False,
-                                 'heures_sup': '', 'overtime_s': 0})
+                                 'heures_sup': '', 'overtime_s': 0,
+                                 'justifie': jdata['justifie'], 'motif': jdata['motif'],
+                                 'id_justificatif': jdata['id_justificatif']})
 
         # Sort alphabetically by agent name
         day_list.sort(key=lambda x: x['agent'])
 
         p = sum(1 for a in day_list if a['present'])
+        jst = sum(1 for a in day_list if not a['present'] and a.get('justifie'))
         result.append({'jour': jour, 'presents': p, 'absents': expected - p,
+                       'justifies': jst,
                        'attendus': expected, 'taux': round((p / expected) * 100, 1) if expected else 0,
                        'agents': day_list})
 
@@ -509,3 +550,107 @@ def carriere_conges_save(request):
             [id_personnel, id_congetype, startdate, enddate, jours_ouvrables, id_annee]
         )
     return Response({'success': True})
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  JUSTIFICATIFS — CRUD for absence justifications
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@api_view(['POST'])
+def justificatif_save(request):
+    """Upsert an absence justification (justifié/non justifié + motif)."""
+    _ensure_justificatifs_table()
+    data = request.data
+    id_personnel = data.get('id_personnel')
+    date_absence = data.get('date_absence')
+    justifie = 1 if data.get('justifie') else 0
+    motif = data.get('motif', '') or ''
+
+    if not id_personnel or not date_absence:
+        return Response({'success': False, 'error': 'Champs requis manquants'}, status=400)
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT id_justificatif FROM personnel_pointage_justificatifs WHERE id_personnel = %s AND date_absence = %s",
+            [id_personnel, date_absence]
+        )
+        row = cursor.fetchone()
+        if row:
+            cursor.execute(
+                "UPDATE personnel_pointage_justificatifs SET justifie = %s, motif = %s WHERE id_justificatif = %s",
+                [justifie, motif, row[0]]
+            )
+            return Response({'success': True, 'id_justificatif': row[0], 'action': 'updated'})
+        else:
+            cursor.execute(
+                """INSERT INTO personnel_pointage_justificatifs (id_personnel, date_absence, justifie, motif)
+                   VALUES (%s, %s, %s, %s)""",
+                [id_personnel, date_absence, justifie, motif]
+            )
+            return Response({'success': True, 'id_justificatif': cursor.lastrowid, 'action': 'created'})
+
+
+@api_view(['GET'])
+def justificatif_history(request):
+    """Return absence history for a given agent (with justification status)."""
+    _ensure_justificatifs_table()
+    id_personnel = request.GET.get('id_personnel')
+    if not id_personnel:
+        return Response({'error': 'id_personnel requis'}, status=400)
+
+    with connection.cursor() as cursor:
+        # Get agent info
+        cursor.execute("""
+            SELECT p.id_personnel,
+                   CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS agent,
+                   p.matricule, IFNULL(g.code,'—') AS grade_code
+            FROM personnel p
+            LEFT JOIN personnel_grade_administratif g ON g.id_grade_administratif = p.id_grade_administratif
+            WHERE p.id_personnel = %s
+        """, [id_personnel])
+        pers_info = _dictfetchall(cursor)
+
+        # Get all justifications for this agent
+        cursor.execute("""
+            SELECT id_justificatif, date_absence, justifie, motif
+            FROM personnel_pointage_justificatifs
+            WHERE id_personnel = %s
+            ORDER BY date_absence DESC
+        """, [id_personnel])
+        justificatifs = _dictfetchall(cursor)
+
+    return Response({
+        'agent': pers_info[0] if pers_info else {},
+        'justificatifs': justificatifs
+    })
+
+
+@api_view(['GET'])
+def justificatifs_list(request):
+    """List all justifications for a given month (or all)."""
+    _ensure_justificatifs_table()
+    mois = request.GET.get('mois', '')
+
+    with connection.cursor() as cursor:
+        if mois:
+            cursor.execute("""
+                SELECT j.id_justificatif, j.id_personnel, j.date_absence, j.justifie, j.motif,
+                       CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS agent,
+                       p.matricule, IFNULL(g.code,'—') AS grade_code
+                FROM personnel_pointage_justificatifs j
+                JOIN personnel p ON p.id_personnel = j.id_personnel
+                LEFT JOIN personnel_grade_administratif g ON g.id_grade_administratif = p.id_grade_administratif
+                WHERE CONCAT(YEAR(j.date_absence), '-', LPAD(MONTH(j.date_absence),2,'0')) = %s
+                ORDER BY j.date_absence DESC, p.nom
+            """, [mois])
+        else:
+            cursor.execute("""
+                SELECT j.id_justificatif, j.id_personnel, j.date_absence, j.justifie, j.motif,
+                       CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS agent,
+                       p.matricule, IFNULL(g.code,'—') AS grade_code
+                FROM personnel_pointage_justificatifs j
+                JOIN personnel p ON p.id_personnel = j.id_personnel
+                LEFT JOIN personnel_grade_administratif g ON g.id_grade_administratif = p.id_grade_administratif
+                ORDER BY j.date_absence DESC, p.nom
+            """)
+        return Response(_dictfetchall(cursor))
