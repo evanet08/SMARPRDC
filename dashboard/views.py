@@ -244,7 +244,13 @@ def presence_personnel_detail(request):
         tolerance_h = 3
         if tol_row and tol_row[0]:
             try:
-                tolerance_h = int(str(tol_row[0]).replace('h','').replace('H','').split(':')[0])
+                raw = str(tol_row[0]).strip()
+                if 'h' in raw.lower():
+                    tolerance_h = int(raw.lower().split('h')[0])
+                elif ':' in raw:
+                    tolerance_h = int(raw.split(':')[0])
+                else:
+                    tolerance_h = int(raw)
             except (ValueError, IndexError):
                 pass
 
