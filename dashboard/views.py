@@ -229,9 +229,11 @@ def presence_personnel_summary(request):
 
 @api_view(['GET'])
 def presence_personnel_detail(request):
-    """Per-day individual entries for a given month."""
+    """Per-day individual entries for a given month — includes absent agents."""
     from collections import OrderedDict
-    from datetime import timedelta
+    from datetime import timedelta, date
+    import calendar
+
     mois = request.GET.get('mois', '')
     if not mois:
         return Response({'error': 'Paramètre mois requis'}, status=400)
@@ -249,8 +251,16 @@ def presence_personnel_detail(request):
         cursor.execute("SELECT id_coupon, heureD FROM personnel_pointage_coupon")
         coupon_map = {r[0]: r[1] for r in cursor.fetchall()}
 
-        cursor.execute("SELECT COUNT(*) FROM personnel WHERE isAdministratif=1 AND en_fonction=1 AND id_personnel != 1")
-        expected = cursor.fetchone()[0] or 0
+        # All active personnel (for absent detection)
+        cursor.execute("""
+            SELECT p.id_personnel,
+                   CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS agent
+            FROM personnel p
+            WHERE p.isAdministratif = 1 AND p.en_fonction = 1 AND p.id_personnel != 1
+            ORDER BY p.nom, p.postnom
+        """)
+        all_personnel = _dictfetchall(cursor)
+        expected = len(all_personnel)
 
         cursor.execute("""
             SELECT pp.id_personnel,
@@ -280,48 +290,76 @@ def presence_personnel_detail(request):
             return f"{ts//3600}h{(ts%3600)//60:02d}"
         return str(t)
 
-    days = OrderedDict()
+    # Build pointage data per day
+    days_data = OrderedDict()
     for r in rows:
         jour = str(r['jour'])
-        if jour not in days:
-            days[jour] = {}
+        if jour not in days_data:
+            days_data[jour] = {}
         aid = r['id_personnel']
-        if aid not in days[jour]:
-            days[jour][aid] = {'agent': r['agent'], 'entries': [], 'exits': [],
+        if aid not in days_data[jour]:
+            days_data[jour][aid] = {'agent': r['agent'], 'entries': [], 'exits': [],
                                'coupon_heureD': coupon_map.get(r['id_coupon'], '8h00')}
         if r['type_pointage'] == 1:
-            days[jour][aid]['entries'].append(r['heure'])
+            days_data[jour][aid]['entries'].append(r['heure'])
         elif r['type_pointage'] == 2:
-            days[jour][aid]['exits'].append(r['heure'])
+            days_data[jour][aid]['exits'].append(r['heure'])
 
+    # Determine all business days in the month
+    parts = mois.split('-')
+    year_v, month_v = int(parts[0]), int(parts[1])
+    _, last_day = calendar.monthrange(year_v, month_v)
+    today = date.today()
+    all_days_in_month = []
+    for d in range(1, last_day + 1):
+        dt = date(year_v, month_v, d)
+        if dt.weekday() < 5 and dt <= today:  # Mon-Fri, not future
+            all_days_in_month.append(str(dt))
+
+    # Merge: for each business day, include ALL personnel
     result = []
-    for jour, agents in days.items():
+    for jour in all_days_in_month:
+        pointage_day = days_data.get(jour, {})
         day_list = []
-        for info in agents.values():
-            fe = min(info['entries']) if info['entries'] else None
-            le = max(info['exits']) if info['exits'] else None
-            # Fallback: if no exit recorded but multiple entries exist,
-            # use the last entry as departure when gap > 4h
-            if not le and fe and len(info['entries']) > 1:
-                last_entry = max(info['entries'])
-                gap = parse_t(last_entry) - parse_t(fe)
-                if gap > 4 * 3600:
-                    le = last_entry
-            arr_s = parse_t(fe) if fe else None
-            hd_s = parse_t(info['coupon_heureD'])
-            present = arr_s is not None and arr_s <= hd_s + tolerance_h * 3600
-            overtime = ''
-            overtime_s = 0
-            if fe and le:
-                worked = parse_t(le) - parse_t(fe)
-                if worked > 8 * 3600:
-                    extra = worked - 8 * 3600
-                    overtime_s = int(extra)
-                    overtime = f"{int(extra//3600)}h{int((extra%3600)//60):02d}"
-            day_list.append({'agent': info['agent'], 'arrivee': fmt_t(fe),
-                             'depart': fmt_t(le), 'present': present,
-                             'heures_sup': overtime, 'overtime_s': overtime_s})
-        day_list.sort(key=lambda x: x['arrivee'])
+        for pers in all_personnel:
+            aid = pers['id_personnel']
+            if aid in pointage_day:
+                info = pointage_day[aid]
+                fe = min(info['entries']) if info['entries'] else None
+                le = max(info['exits']) if info['exits'] else None
+                # Fallback: multiple entries with big gap = entry/exit
+                if not le and fe and len(info['entries']) > 1:
+                    last_entry = max(info['entries'])
+                    gap = parse_t(last_entry) - parse_t(fe)
+                    if gap > 4 * 3600:
+                        le = last_entry
+                arr_s = parse_t(fe) if fe else None
+                hd_s = parse_t(info['coupon_heureD'])
+                present = arr_s is not None and arr_s <= hd_s + tolerance_h * 3600
+                overtime = ''
+                overtime_s = 0
+                if fe and le:
+                    worked = parse_t(le) - parse_t(fe)
+                    if worked > 8 * 3600:
+                        extra = worked - 8 * 3600
+                        overtime_s = int(extra)
+                        overtime = f"{int(extra//3600)}h{int((extra%3600)//60):02d}"
+                day_list.append({'agent': pers['agent'], 'arrivee': fmt_t(fe),
+                                 'depart': fmt_t(le), 'present': present,
+                                 'heures_sup': overtime, 'overtime_s': overtime_s})
+            else:
+                # ABSENT — no pointage
+                day_list.append({'agent': pers['agent'], 'arrivee': '—',
+                                 'depart': '—', 'present': False,
+                                 'heures_sup': '', 'overtime_s': 0})
+
+        # Sort: present first (by arrival), then absent (alphabetical)
+        presents = [a for a in day_list if a['present']]
+        absents = [a for a in day_list if not a['present']]
+        presents.sort(key=lambda x: x['arrivee'] if x['arrivee'] != '—' else 'z')
+        absents.sort(key=lambda x: x['agent'])
+        day_list = presents + absents
+
         p = sum(1 for a in day_list if a['present'])
         result.append({'jour': jour, 'presents': p, 'absents': expected - p,
                        'attendus': expected, 'taux': round((p / expected) * 100, 1) if expected else 0,
