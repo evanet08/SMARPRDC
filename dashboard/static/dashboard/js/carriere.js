@@ -433,6 +433,7 @@ async function loadCarriereStats() {
 const MOIS_FR = {1:'Janvier',2:'Février',3:'Mars',4:'Avril',5:'Mai',6:'Juin',7:'Juillet',8:'Août',9:'Septembre',10:'Octobre',11:'Novembre',12:'Décembre'};
 function fmtOT(s){if(!s)return'—';const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return`${h}h${m<10?'0':''}${m}`;}
 function rateBadge(t){const c=t>=75?'#10b981':t>=50?'#f59e0b':'#ef4444';return`<strong style="color:${c}">${t}%</strong>`;}
+function expBtnsC(pdfFn,xlsFn){return`<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();${pdfFn}" style="padding:3px 8px;font-size:.62rem">📄</button><button class="btn btn-success btn-sm" onclick="event.stopPropagation();${xlsFn}" style="padding:3px 8px;font-size:.62rem">📗</button>`;}
 
 function toggleSec(id){
     const el=document.getElementById(id);
@@ -440,6 +441,58 @@ function toggleSec(id){
     el.classList.toggle('collapsed');
     const ch=document.getElementById('chev-'+id);
     if(ch)ch.classList.toggle('open');
+}
+
+function getWeekRange(dateStr){
+    const d=new Date(dateStr),day=d.getDay()||7;
+    const mon=new Date(d);mon.setDate(d.getDate()-day+1);
+    const sun=new Date(mon);sun.setDate(mon.getDate()+6);
+    const pad=n=>n<10?'0'+n:n;
+    const f=dt=>pad(dt.getDate())+'-'+pad(dt.getMonth()+1)+'-'+dt.getFullYear();
+    return{key:mon.toISOString().slice(0,10),label:`Semaine du ${f(mon)} au ${f(sun)}`};
+}
+
+// Data store for exports
+let _carrPresData = {};
+const PRES_HDR = ['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','H.Supp'];
+
+function _presRows(days){
+    const rows=[];
+    days.forEach(day=>{day.agents.forEach(a=>{
+        rows.push([a.agent,a.matricule||'—',a.matriculeFP||'—',a.grade_code||'—',a.genre||'—',a.recrutement_date||'—',day.jour,a.arrivee||'—',a.depart||'—',a.present?'Oui':'Non',a.heures_sup||'']);
+    });});
+    return rows;
+}
+
+function _carrPdfDoc(title){
+    const {jsPDF}=window.jspdf,doc=new jsPDF('l','mm','a4');
+    doc.setFontSize(14);doc.text('SMAPRDC — '+title,14,15);
+    doc.setFontSize(8);doc.text('Généré le '+new Date().toLocaleDateString('fr-FR'),14,21);
+    return doc;
+}
+
+function exportCarrPresPDF(mois,wi,di){
+    const data=_carrPresData[mois];if(!data)return;
+    let days,label=mois;
+    if(di!==undefined){days=[data.weeks[wi].days[di]];label=data.weeks[wi].days[di].jour;}
+    else if(wi!==undefined){days=data.weeks[wi].days;label=data.weeks[wi].label;}
+    else{days=data.days;const p=mois.split('-');label=MOIS_FR[parseInt(p[1])]+' '+p[0];}
+    const rows=_presRows(days);if(!rows.length)return;
+    const doc=_carrPdfDoc('Présences Personnel — '+label);
+    doc.autoTable({startY:25,head:[PRES_HDR],body:rows,styles:{fontSize:6,cellPadding:1.2},headStyles:{fillColor:[16,185,129]}});
+    doc.save('Presences_'+label.replace(/[^a-zA-Z0-9]/g,'_')+'.pdf');
+}
+function exportCarrPresXls(mois,wi,di){
+    const data=_carrPresData[mois];if(!data)return;
+    let days,label=mois;
+    if(di!==undefined){days=[data.weeks[wi].days[di]];label=data.weeks[wi].days[di].jour;}
+    else if(wi!==undefined){days=data.weeks[wi].days;label=data.weeks[wi].label;}
+    else{days=data.days;const p=mois.split('-');label=MOIS_FR[parseInt(p[1])]+' '+p[0];}
+    const rows=_presRows(days);if(!rows.length)return;
+    const wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet([PRES_HDR,...rows]);
+    ws['!cols']=[{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:12}];
+    XLSX.utils.book_append_sheet(wb,ws,'Présences');
+    XLSX.writeFile(wb,'Presences_'+label.replace(/[^a-zA-Z0-9]/g,'_')+'.xlsx');
 }
 
 let _presLoaded=false;
@@ -452,16 +505,16 @@ async function loadCarrierePresence(){
         const months=await fetch('/stats/presence/personnel/summary').then(r=>r.json());
         if(!months.length){wrap.innerHTML='<div class="empty-state"><div class="empty-state-text">Aucune donnée de présence</div></div>';cumWrap.innerHTML=wrap.innerHTML;return;}
 
-        // Monthly accordion
         let html='';
         months.forEach((row,mi)=>{
             const parts=row.mois.split('-');
             const label=MOIS_FR[parseInt(parts[1])]+' '+parts[0];
             const mId='carr-m-'+mi;
-            html+=`<div class="subsection-title" onclick="toggleSec('${mId}');loadCarrMonth('${row.mois}','${mId}')" style="margin-top:6px">
+            html+=`<div class="subsection-title" onclick="toggleSec('${mId}');loadCarrMonth('${row.mois}')" style="margin-top:6px">
                 <span class="sec-icon">📅</span> ${label}
                 <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
                     <span id="carr-ms-${row.mois}" style="font-size:.75rem"></span>
+                    ${expBtnsC("exportCarrPresPDF('"+row.mois+"')","exportCarrPresXls('"+row.mois+"')")}
                     <span class="section-chevron" id="chev-${mId}">▼</span>
                 </span>
             </div><div class="section-body collapsed" id="${mId}">
@@ -471,7 +524,7 @@ async function loadCarrierePresence(){
         wrap.innerHTML=html;
         document.getElementById('pres-period-info').textContent=months.length+' mois';
 
-        // Cumuls: fetch all months
+        // Cumuls
         const allData=await Promise.all(months.map(m=>fetch('/stats/presence/personnel/detail?mois='+m.mois).then(r=>r.json())));
         const agentMap={};
         let tExp=0,tPres=0,tDays=0;
@@ -498,7 +551,7 @@ async function loadCarrierePresence(){
     }
 }
 
-async function loadCarrMonth(mois,secId){
+async function loadCarrMonth(mois){
     const container=document.getElementById('carr-md-'+mois);
     if(!container||container.dataset.loaded==='1')return;
     container.dataset.loaded='1';
@@ -511,22 +564,51 @@ async function loadCarrMonth(mois,secId){
         const ms=document.getElementById('carr-ms-'+mois);
         if(ms)ms.innerHTML='— '+rateBadge(mRate);
 
+        // Group by week
+        const weeks={};
+        days.forEach(day=>{
+            const w=getWeekRange(day.jour);
+            if(!weeks[w.key])weeks[w.key]={label:w.label,key:w.key,days:[],presents:0,attendus:0};
+            weeks[w.key].days.push(day);
+            weeks[w.key].presents+=day.presents;
+            weeks[w.key].attendus+=day.attendus;
+        });
+        const sortedWeeks=Object.entries(weeks).sort((a,b)=>a[0].localeCompare(b[0]));
+
+        // Store for exports
+        _carrPresData[mois]={days,weeks:sortedWeeks.map(([k,w])=>w)};
+
         let html='';
-        days.forEach((day,di)=>{
-            const dayId=`carr-day-${mois}-${di}`;
-            html+=`<div class="subsection-title" onclick="toggleSec('${dayId}')" style="margin-top:4px;margin-left:12px;font-size:.76rem;background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
-                <span class="sec-icon">📋</span> ${day.jour}
+        sortedWeeks.forEach(([wKey,w],wi)=>{
+            const wId=`carr-w-${mois}-${wi}`;
+            const wRate=w.attendus?((w.presents/w.attendus)*100).toFixed(1):0;
+            html+=`<div class="subsection-title" onclick="toggleSec('${wId}')" style="margin-top:6px;margin-left:12px;font-size:.78rem;background:linear-gradient(135deg,#eff6ff,#dbeafe)">
+                <span class="sec-icon">📆</span> ${w.label}
                 <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
-                    <span style="font-size:.72rem">✅ ${day.presents} · ❌ ${day.absents} — ${rateBadge(day.taux)}</span>
-                    <span class="section-chevron" id="chev-${dayId}">▼</span>
+                    <span style="font-size:.72rem">— ${rateBadge(wRate)}</span>
+                    ${expBtnsC("exportCarrPresPDF('"+mois+"',"+wi+")","exportCarrPresXls('"+mois+"',"+wi+")")}
+                    <span class="section-chevron" id="chev-${wId}">▼</span>
                 </span>
-            </div><div class="section-body collapsed" id="${dayId}" style="margin-left:12px">
-                <table class="pres-table"><thead><tr><th>Agent</th><th>Mat.ENF</th><th>Mat.FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>H.Supp</th></tr></thead><tbody>`;
-            day.agents.forEach(a=>{
-                const b=a.present?'<span style="color:#10b981;font-weight:700">✓</span>':'<span style="color:#ef4444;font-weight:700">✗</span>';
-                html+=`<tr><td>${a.agent}</td><td style="font-size:.72rem">${a.matricule||'—'}</td><td style="font-size:.72rem">${a.matriculeFP||'—'}</td><td style="font-size:.72rem">${a.grade_code||'—'}</td><td>${a.genre||'—'}</td><td style="font-size:.72rem">${a.recrutement_date||'—'}</td><td>${a.arrivee}</td><td>${a.depart}</td><td>${b}</td><td>${a.heures_sup||'—'}</td></tr>`;
+            </div><div class="section-body collapsed" id="${wId}">`;
+
+            w.days.forEach((day,di)=>{
+                const dayId=`carr-d-${mois}-${wi}-${di}`;
+                html+=`<div class="subsection-title" onclick="toggleSec('${dayId}')" style="margin-top:3px;margin-left:28px;font-size:.74rem;background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
+                    <span class="sec-icon">📋</span> ${day.jour}
+                    <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+                        <span style="font-size:.72rem">✅ ${day.presents} · ❌ ${day.absents} — ${rateBadge(day.taux)}</span>
+                        ${expBtnsC("exportCarrPresPDF('"+mois+"',"+wi+","+di+")","exportCarrPresXls('"+mois+"',"+wi+","+di+")")}
+                        <span class="section-chevron" id="chev-${dayId}">▼</span>
+                    </span>
+                </div><div class="section-body collapsed" id="${dayId}" style="margin-left:28px">
+                    <table class="pres-table"><thead><tr><th>Agent</th><th>Mat.ENF</th><th>Mat.FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>H.Supp</th></tr></thead><tbody>`;
+                day.agents.forEach(a=>{
+                    const b=a.present?'<span style="color:#10b981;font-weight:700">✓</span>':'<span style="color:#ef4444;font-weight:700">✗</span>';
+                    html+=`<tr><td>${a.agent}</td><td style="font-size:.72rem">${a.matricule||'—'}</td><td style="font-size:.72rem">${a.matriculeFP||'—'}</td><td style="font-size:.72rem">${a.grade_code||'—'}</td><td>${a.genre||'—'}</td><td style="font-size:.72rem">${a.recrutement_date||'—'}</td><td>${a.arrivee}</td><td>${a.depart}</td><td>${b}</td><td>${a.heures_sup||'—'}</td></tr>`;
+                });
+                html+='</tbody></table></div>';
             });
-            html+='</tbody></table></div>';
+            html+='</div>';
         });
         container.innerHTML=html;
     }catch(e){
@@ -534,13 +616,12 @@ async function loadCarrMonth(mois,secId){
         container.innerHTML='<span style="color:#ef4444">Erreur</span>';
     }
 }
+
 // ═══ EXPORT CUMULS (STATS TAB) ═══════════════════════════════════════════════
 function exportCumulsCarrPDF(){
     const tbl=document.querySelector('#carr-cumuls-wrap table');
     if(!tbl)return;
-    const {jsPDF}=window.jspdf,doc=new jsPDF('l','mm','a4');
-    doc.setFontSize(14);doc.text('SMAPRDC — Cumuls Heures Supplémentaires',14,15);
-    doc.setFontSize(8);doc.text('Généré le '+new Date().toLocaleDateString('fr-FR'),14,21);
+    const doc=_carrPdfDoc('Cumuls Heures Supplémentaires');
     doc.autoTable({html:tbl,startY:25,styles:{fontSize:6,cellPadding:1.2},headStyles:{fillColor:[245,158,11]}});
     doc.save('SMAPRDC_Cumuls_'+new Date().toISOString().slice(0,10)+'.pdf');
 }
