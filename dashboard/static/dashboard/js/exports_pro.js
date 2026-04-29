@@ -281,7 +281,8 @@ async function exportPresProPDF(days, label, filename) {
     for (let i = dateColStart; i < dateColEnd; i++) cs[i] = { cellWidth: DATE_CW, halign: 'center' };
     for (let i = 0; i < SUM; i++) cs[sumStart + i] = { cellWidth: sumW[i], halign: 'center' };
 
-    const fs = nbJours > 20 ? 4 : (nbJours > 10 ? 4.5 : 5.5);
+    // Font size: bigger for weekly (few cols), smaller for monthly (many cols)
+    const fs = nbJours <= 7 ? 7 : (nbJours <= 15 ? 5.5 : (nbJours <= 22 ? 4.5 : 4));
     const agentCount = agents.length;
 
     doc.autoTable({
