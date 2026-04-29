@@ -144,6 +144,10 @@ function _drawSignatures(doc, pageW, startY) {
     doc.setFontSize(7); doc.setFont(undefined, 'normal');
     doc.text('Chef de Division des Ress. Humaines', pageW * 0.25, y, { align: 'center' });
     doc.text('Directeur des Ressources', pageW * 0.75, y, { align: 'center' });
+    y += 10;
+    doc.setFont(undefined, 'bold');
+    doc.text('MUNGA SAFI RITA', pageW * 0.25, y, { align: 'center' });
+    doc.text('TANDU SAVA Hippolyte', pageW * 0.75, y, { align: 'center' });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -185,16 +189,18 @@ async function exportPresProPDF(days, label, filename) {
     const sumStart = dateColEnd;
     const totalCols = FIXED + nbJours + SUM;
 
-    // Compute column widths to fill 100% page width
-    const M = 3; // minimal side margin
+    // Column widths: dates & stats get FIXED narrow width, identification columns absorb rest
+    const M = 3; // side margin
     const usable = pageW - 2 * M;
-    const fixedW = [7, 16, 0, 14, 8]; // #, Mat, Name(auto), MatFP, Grade
-    const sumW = [8, 7, 8, 7, 11];    // NbrePrés, %, NbreAbs, %, Cumul
-    const fixedTotal = fixedW.reduce((a, b) => a + b, 0);
+    const DATE_CW = 7;  // each date column: fixed 7mm
+    const sumW = [8, 7, 8, 7, 11]; // NbrePrés, %, NbreAbs, %, Cumul (fixed narrow)
     const sumTotal = sumW.reduce((a, b) => a + b, 0);
-    const dateW = Math.max(5, (usable - fixedTotal - sumTotal - 2) / nbJours);
-    fixedW[2] = usable - (fixedTotal + sumTotal + dateW * nbJours); // name gets remainder
-    if (fixedW[2] < 20) fixedW[2] = 20;
+    const dateTotalW = DATE_CW * nbJours;
+    const idRemain = usable - dateTotalW - sumTotal; // space for identification cols
+    // Distribute identification space: #(6), Mat.ENF(15), Nom(flex), Mat.FP(13), Grade(8)
+    const fixMinW = 6 + 15 + 13 + 8; // 42mm for #,Mat,MatFP,Grade
+    const nameW = Math.max(25, idRemain - fixMinW);
+    const fixedW = [6, 15, nameW, 13, 8];
 
     // Column header labels
     const dateCols = dateStrs.map(d => _fmtDateFR(d));
@@ -220,10 +226,10 @@ async function exportPresProPDF(days, label, filename) {
     };
     const subRows = [mkSub('Début', '8h00'), mkSub('Fin', '16h00'), mkSub('Durée', '08h00')];
 
-    // Agent data rows — # starts at 121 like reference
+    // Agent data rows
     const bodyRows = [];
     agents.forEach((ag, i) => {
-        const row = [121 + i, ag.matricule, ag.agent, ag.matriculeFP, ag.grade_code];
+        const row = [i + 1, ag.matricule, ag.agent, ag.matriculeFP, ag.grade_code];
         let pres = 0, abs = 0;
         dateStrs.forEach(d => {
             const v = (matrix[ag.id] || {})[d] || '';
@@ -269,7 +275,7 @@ async function exportPresProPDF(days, label, filename) {
     // Column styles — FULL WIDTH
     const cs = {};
     for (let i = 0; i < FIXED; i++) cs[i] = { cellWidth: fixedW[i], halign: i === 2 ? 'left' : 'center' };
-    for (let i = dateColStart; i < dateColEnd; i++) cs[i] = { cellWidth: dateW, halign: 'center' };
+    for (let i = dateColStart; i < dateColEnd; i++) cs[i] = { cellWidth: DATE_CW, halign: 'center' };
     for (let i = 0; i < SUM; i++) cs[sumStart + i] = { cellWidth: sumW[i], halign: 'center' };
 
     const fs = nbJours > 20 ? 4 : (nbJours > 10 ? 4.5 : 5.5);
@@ -387,7 +393,7 @@ async function exportPresProXls(days, label, filename) {
     rows.push(['', '', '', '', 'Durée', ...dateStrs.map(() => '08h00'), '', '', '', '', '']);
 
     agents.forEach((ag, i) => {
-        const row = [121 + i, ag.matricule, ag.agent, ag.matriculeFP, ag.grade_code];
+        const row = [i + 1, ag.matricule, ag.agent, ag.matriculeFP, ag.grade_code];
         let pres = 0, abs = 0;
         dateStrs.forEach(d => { const v = (matrix[ag.id] || {})[d] || ''; row.push(v); if (v === 'P') pres++; if (v === 'A') abs++; });
         const t = pres + abs;
@@ -408,6 +414,8 @@ async function exportPresProXls(days, label, filename) {
     rows.push(tPR); rows.push(tAR);
     rows.push([]); rows.push([]);
     rows.push(['', '', 'Chef de Division des Ress. Humaines', '', '', '', '', '', '', '', '', '', 'Directeur des Ressources']);
+    rows.push([]);
+    rows.push(['', '', 'MUNGA SAFI RITA', '', '', '', '', '', '', '', '', '', 'TANDU SAVA Hippolyte']);
 
     const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(rows);
     const cols = [{ wch: 5 }, { wch: 14 }, { wch: 30 }, { wch: 12 }, { wch: 8 }];
