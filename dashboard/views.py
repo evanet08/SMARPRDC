@@ -229,7 +229,20 @@ def presence_personnel_summary(request):
 
 @api_view(['GET'])
 def presence_personnel_detail(request):
-    """Per-day individual entries for a given month — includes absent agents + justifications."""
+    """Per-day individual entries for a given month — includes absent agents + justifications.
+
+    CRITICAL: Availability is computed PER DATE.
+    A person is AVAILABLE on a given date IF:
+      - isAdministratif = 1
+      - en_fonction = 1
+      - AND has NO active congé covering that date
+      - AND has NO non-EnFx professional status (i.e., their état is 'En fonction' or unset)
+
+    Personnel who are unavailable on a given date are:
+      - NOT counted as absent
+      - NOT included in total expected
+      - Shown separately with a 'Non disponible' marker
+    """
     from collections import OrderedDict
     from datetime import timedelta, date
     import calendar
@@ -257,7 +270,7 @@ def presence_personnel_detail(request):
         cursor.execute("SELECT id_coupon, heureD FROM personnel_pointage_coupon")
         coupon_map = {r[0]: r[1] for r in cursor.fetchall()}
 
-        # All active personnel (for absent detection)
+        # All active personnel (base pool: isAdministratif + en_fonction)
         cursor.execute("""
             SELECT p.id_personnel,
                    CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS agent,
@@ -269,7 +282,44 @@ def presence_personnel_detail(request):
             ORDER BY p.nom, p.postnom
         """)
         all_personnel = _dictfetchall(cursor)
-        expected = len(all_personnel)
+
+        # ── AVAILABILITY DATA: Professional states ───────────────────────
+        # Personnel with a non-EnFx état are UNAVAILABLE on ALL dates.
+        # 'EnFx' (sigle) means "En fonction" = available.
+        # Personnel WITHOUT any état record are considered "En fonction" (available).
+        cursor.execute("""
+            SELECT ep.id_personnel, pr.sigle, pr.parametre
+            FROM personnel_etatprofessionnel ep
+            JOIN personnel_etatprofessionnel_parametes pr ON pr.id_parametre = ep.id_parametre
+            JOIN personnel p ON p.id_personnel = ep.id_personnel
+            WHERE p.isAdministratif = 1 AND p.en_fonction = 1 AND p.id_personnel != 1
+        """)
+        etat_rows = _dictfetchall(cursor)
+        # Map: id_personnel → {sigle, parametre}
+        etat_map = {}
+        for er in etat_rows:
+            etat_map[er['id_personnel']] = {'sigle': er['sigle'], 'parametre': er['parametre']}
+
+        # ── AVAILABILITY DATA: Active congés for this month ──────────────
+        # A congé covers a date range [startdate, enddate].
+        # Any personnel on congé for a given date is UNAVAILABLE on that date.
+        cursor.execute("""
+            SELECT pc.id_personnel, pc.startdate, pc.enddate
+            FROM personnel_conges pc
+            JOIN personnel p ON p.id_personnel = pc.id_personnel
+            WHERE p.isAdministratif = 1 AND p.en_fonction = 1 AND p.id_personnel != 1
+              AND pc.enddate >= %s AND pc.startdate <= %s
+        """, [f"{mois}-01", f"{mois}-31"])
+        conge_rows = _dictfetchall(cursor)
+        # Build lookup: id_personnel → list of (startdate, enddate) ranges
+        conge_map = {}
+        for cr in conge_rows:
+            pid = cr['id_personnel']
+            if pid not in conge_map:
+                conge_map[pid] = []
+            sd = cr['startdate'] if isinstance(cr['startdate'], date) else date.fromisoformat(str(cr['startdate']))
+            ed = cr['enddate'] if isinstance(cr['enddate'], date) else date.fromisoformat(str(cr['enddate']))
+            conge_map[pid].append((sd, ed))
 
         cursor.execute("""
             SELECT pp.id_personnel,
@@ -319,6 +369,20 @@ def presence_personnel_detail(request):
             return f"{ts//3600}h{(ts%3600)//60:02d}"
         return str(t)
 
+    def _is_on_conge(pid, dt):
+        """Check if a personnel has an active congé on a given date."""
+        for sd, ed in conge_map.get(pid, []):
+            if sd <= dt <= ed:
+                return True
+        return False
+
+    def _has_non_enfx_etat(pid):
+        """Check if a personnel has a non-EnFx professional status."""
+        etat = etat_map.get(pid)
+        if etat and etat['sigle'] != 'EnFx':
+            return etat
+        return None
+
     # Build pointage data per day
     days_data = OrderedDict()
     for r in rows:
@@ -345,16 +409,43 @@ def presence_personnel_detail(request):
         if dt.weekday() < 5 and dt <= today:  # Mon-Fri, not future
             all_days_in_month.append(str(dt))
 
-    # Merge: for each business day, include ALL personnel
+    # ── PER-DATE availability computation ────────────────────────────────
     result = []
     for jour in all_days_in_month:
+        jour_dt = date.fromisoformat(jour)
         pointage_day = days_data.get(jour, {})
         day_list = []
+        day_expected = 0  # dynamic per-date expected count
+
         for pers in all_personnel:
             aid = pers['id_personnel']
             _pinfo = {'id_personnel': aid, 'matricule': pers.get('matricule',''), 'matriculeFP': pers.get('matriculeFP',''),
                       'grade_code': pers.get('grade_code','—'), 'genre': pers.get('genre',''),
                       'recrutement_date': str(pers.get('recrutement_date','') or '')}
+
+            # ── Check per-date availability ──────────────────────────
+            unavail_reason = None
+            non_enfx = _has_non_enfx_etat(aid)
+            if non_enfx:
+                unavail_reason = non_enfx['parametre']
+            elif _is_on_conge(aid, jour_dt):
+                unavail_reason = 'En congé'
+
+            if unavail_reason:
+                # Person is NOT AVAILABLE on this date:
+                # - NOT counted in expected
+                # - NOT counted as absent
+                # - Shown with 'non_disponible' flag for frontend display
+                day_list.append({'agent': pers['agent'], **_pinfo, 'arrivee': '—',
+                                 'depart': '—', 'present': False,
+                                 'heures_sup': '', 'overtime_s': 0,
+                                 'justifie': None, 'motif': '', 'id_justificatif': None,
+                                 'non_disponible': True, 'motif_indisponibilite': unavail_reason})
+                continue
+
+            # Person IS AVAILABLE on this date → count toward expected
+            day_expected += 1
+
             if aid in pointage_day:
                 info = pointage_day[aid]
                 fe = min(info['entries']) if info['entries'] else None
@@ -379,28 +470,33 @@ def presence_personnel_detail(request):
                 day_list.append({'agent': pers['agent'], **_pinfo, 'arrivee': fmt_t(fe),
                                  'depart': fmt_t(le), 'present': present,
                                  'heures_sup': overtime, 'overtime_s': overtime_s,
-                                 'justifie': None, 'motif': '', 'id_justificatif': None})
+                                 'justifie': None, 'motif': '', 'id_justificatif': None,
+                                 'non_disponible': False, 'motif_indisponibilite': ''})
             else:
-                # ABSENT — include justification data
+                # AVAILABLE but ABSENT — include justification data
                 jk = f"{aid}|{jour}"
                 jdata = just_map.get(jk, {'id_justificatif': None, 'justifie': False, 'motif': ''})
                 day_list.append({'agent': pers['agent'], **_pinfo, 'arrivee': '—',
                                  'depart': '—', 'present': False,
                                  'heures_sup': '', 'overtime_s': 0,
                                  'justifie': jdata['justifie'], 'motif': jdata['motif'],
-                                 'id_justificatif': jdata['id_justificatif']})
+                                 'id_justificatif': jdata['id_justificatif'],
+                                 'non_disponible': False, 'motif_indisponibilite': ''})
 
         # Sort alphabetically by agent name
         day_list.sort(key=lambda x: x['agent'])
 
         p = sum(1 for a in day_list if a['present'])
-        jst = sum(1 for a in day_list if not a['present'] and a.get('justifie'))
-        result.append({'jour': jour, 'presents': p, 'absents': expected - p,
-                       'justifies': jst,
-                       'attendus': expected, 'taux': round((p / expected) * 100, 1) if expected else 0,
+        absent_count = sum(1 for a in day_list if not a['present'] and not a.get('non_disponible'))
+        indisponible_count = sum(1 for a in day_list if a.get('non_disponible'))
+        jst = sum(1 for a in day_list if not a['present'] and not a.get('non_disponible') and a.get('justifie'))
+        result.append({'jour': jour, 'presents': p, 'absents': absent_count,
+                       'justifies': jst, 'indisponibles': indisponible_count,
+                       'attendus': day_expected,
+                       'taux': round((p / day_expected) * 100, 1) if day_expected else 0,
                        'agents': day_list})
 
-    return Response({'total_expected': expected, 'days': result})
+    return Response({'total_expected': len(all_personnel), 'days': result})
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -653,3 +749,33 @@ def justificatifs_list(request):
                 ORDER BY c.date_coupon DESC, p.nom
             """)
         return Response(_dictfetchall(cursor))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  INSTITUTION — Metadata + logos for official PDF reports
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@api_view(['GET'])
+def institution_info(request):
+    """Return institution metadata for PDF header.
+    Logos are served as static assets from /static/dashboard/img/.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT nom_institution, sigle, telephone, email, site,
+                   ministere, categorie, siege, pays
+            FROM institution LIMIT 1
+        """)
+        row = cursor.fetchone()
+        if not row:
+            return Response({'error': 'Aucune institution trouvée'}, status=404)
+
+        cols = [c[0] for c in cursor.description]
+        data = dict(zip(cols, row))
+
+        # Static logo paths (served from Django static files)
+        data['logo_url'] = '/static/dashboard/img/logoENF.png'
+        data['logo_ministere_url'] = '/static/dashboard/img/logoMinFin.png'
+        data['logo_pays_url'] = '/static/dashboard/img/logoRDC.jpg'
+
+    return Response(data)

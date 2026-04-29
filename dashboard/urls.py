@@ -39,4 +39,7 @@ urlpatterns = [
     path('stats/presence/justificatif/save', views.justificatif_save, name='justificatif-save'),
     path('stats/presence/justificatif/history', views.justificatif_history, name='justificatif-history'),
     path('stats/presence/justificatifs', views.justificatifs_list, name='justificatifs-list'),
+
+    # ── Institution ───────────────────────────────────────────────────────
+    path('stats/institution', views.institution_info, name='institution-info'),
 ]

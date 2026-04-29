@@ -392,7 +392,7 @@ async function loadPresencePersonnel() {
                 <span class="sec-icon">📅</span> ${label}
                 <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
                     <span id="month-stats-${row.mois}" style="font-size:.75rem"></span>
-                    ${expBtns(`exportPersPDF('${row.mois}')`, `exportPersXls('${row.mois}')`)}
+                    ${expBtns(`exportPresProPDFWrapper('dash','${row.mois}')`, `exportPresProXlsWrapper('dash','${row.mois}')`)}
                     <span class="section-chevron" id="chev-${mId}">▼</span>
                 </span>
             </div><div class="section-body collapsed" id="${mId}">
@@ -453,7 +453,7 @@ async function loadMonthWeeks(mois) {
                 <span class="sec-icon">📆</span> ${w.label}
                 <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
                     <span style="font-size:.75rem">— ${rateBadge(wRate)}</span>
-                    ${expBtns(`exportPersPDF('${mois}',${wi})`, `exportPersXls('${mois}',${wi})`)}
+                    ${expBtns(`exportPresProPDFWrapper('dash','${mois}',${wi})`, `exportPresProXlsWrapper('dash','${mois}',${wi})`)}
                     <span class="section-chevron" id="chev-${wId}">▼</span>
                 </span>
             </div><div class="section-body collapsed" id="${wId}">`;
@@ -461,16 +461,22 @@ async function loadMonthWeeks(mois) {
             w.days.forEach((day, di) => {
                 const dayId = `pers-d-${mois}-${wi}-${di}`;
                 const justCount = day.justifies || 0;
+                const indispCount = day.indisponibles || 0;
                 html += `<div class="subsection-title" onclick="toggleSection('${dayId}')" style="margin-top:3px;margin-left:28px;font-size:.74rem;background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
                     <span class="sec-icon">📋</span> ${day.jour}
                     <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
-                        <span style="font-size:.72rem">✅ ${day.presents} · ❌ ${day.absents}${justCount > 0 ? ' (📝' + justCount + ' just.)' : ''} — ${rateBadge(day.taux)}</span>
+                        <span style="font-size:.72rem">✅ ${day.presents}/${day.attendus} · ❌ ${day.absents}${justCount > 0 ? ' (📝' + justCount + ' just.)' : ''}${indispCount > 0 ? ' · 🚫 ' + indispCount + ' N/D' : ''} — ${rateBadge(day.taux)}</span>
                         ${expBtns(`exportPersPDF('${mois}',${wi},${di})`, `exportPersXls('${mois}',${wi},${di})`)}
                         <span class="section-chevron" id="chev-${dayId}">▼</span>
                     </span>
                 </div><div class="section-body collapsed" id="${dayId}" style="margin-left:28px">
                     <table class="pres-table"><thead><tr><th>Agent</th><th>Mat. ENF</th><th>Mat. FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>Justifié</th><th>H. Supp</th></tr></thead><tbody>`;
                 day.agents.forEach(a => {
+                    // Non-disponible personnel: show with distinct marker
+                    if (a.non_disponible) {
+                        html += `<tr style="opacity:.5;background:#f8fafc"><td>${a.agent}</td><td style="font-size:.72rem">${a.matricule||'—'}</td><td style="font-size:.72rem">${a.matriculeFP||'—'}</td><td style="font-size:.72rem">${a.grade_code||'—'}</td><td>${a.genre||'—'}</td><td style="font-size:.72rem">${a.recrutement_date||'—'}</td><td colspan="3" style="text-align:center;font-weight:600;color:#8b5cf6">🚫 ${a.motif_indisponibilite || 'Non disponible'}</td><td>—</td><td>—</td></tr>`;
+                        return;
+                    }
                     const b = a.present ? '<span style="color:#10b981;font-weight:700">✓ Oui</span>' : '<span style="color:#ef4444;font-weight:700">✗ Non</span>';
                     let justCol = '—';
                     if (!a.present) {
@@ -574,18 +580,22 @@ async function loadPersonnelCumuls() {
             fetch('/stats/presence/personnel/detail?mois=' + m.mois).then(r => r.json())
         ));
 
-        // Aggregate per agent across ALL months
+        // Aggregate per agent across ALL months (respecting per-date availability)
         const agentMap = {};
         let totalExpected = 0, totalPresent = 0, totalDays = 0;
         allData.forEach(raw => {
-            const expected = raw.total_expected;
             raw.days.forEach(day => {
                 totalDays++;
                 totalPresent += day.presents;
                 totalExpected += day.attendus;
                 day.agents.forEach(a => {
-                    if (!agentMap[a.agent]) agentMap[a.agent] = { present: 0, absent: 0, expected: 0, overtime_s: 0,
+                    if (!agentMap[a.agent]) agentMap[a.agent] = { present: 0, absent: 0, expected: 0, overtime_s: 0, indisponible: 0,
                         matricule: a.matricule, matriculeFP: a.matriculeFP, grade_code: a.grade_code, genre: a.genre, recrutement_date: a.recrutement_date };
+                    // Skip non-disponible personnel from presence/absence counts
+                    if (a.non_disponible) {
+                        agentMap[a.agent].indisponible++;
+                        return;
+                    }
                     agentMap[a.agent].expected += 1;
                     if (a.present) agentMap[a.agent].present++;
                     else agentMap[a.agent].absent++;
