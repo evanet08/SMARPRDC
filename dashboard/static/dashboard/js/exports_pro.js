@@ -1,8 +1,6 @@
 /**
  * SMAPRDC — Professional Administrative Report Exports
- * Generates official PDF/Excel reports matching the institutional reference layout.
- * Used for weekly and monthly presence reports.
- * Daily exports remain unchanged (handled in dashboard.js / carriere.js).
+ * EXACT COPY of reference administrative layout.
  */
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -10,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 let _instCache = null;
-const _logoCache = {}; // url → base64 data URI
+const _logoCache = {};
 
 async function _getInstitution() {
     if (_instCache) return _instCache;
@@ -60,8 +58,11 @@ function _buildAgentIndex(days) {
             if (a.non_disponible) return;
             if (!map[a.id_personnel]) {
                 map[a.id_personnel] = {
-                    id: a.id_personnel, matricule: a.matricule || 'N.U',
-                    agent: a.agent, grade_code: a.grade_code || 'N.U'
+                    id: a.id_personnel,
+                    matricule: a.matricule || 'N.U',
+                    matriculeFP: a.matriculeFP || '',
+                    agent: a.agent,
+                    grade_code: a.grade_code || 'N.U'
                 };
             }
         });
@@ -100,81 +101,58 @@ function _fmtOTh(secs) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  PDF HEADER — Official institutional header
+//  PDF HEADER (fixed height = HDR_H mm)
 // ═══════════════════════════════════════════════════════════════════════════════
+const HDR_H = 46;
 
 function _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW) {
     const cX = pageW / 2;
-
-    // Left logo (DRC coat of arms / MinFin)
-    if (logos.left) {
-        try { doc.addImage(logos.left, 'JPEG', 10, 5, 24, 24); } catch (e) {}
-    }
-    // Right logo (ENF)
-    if (logos.right) {
-        try { doc.addImage(logos.right, 'PNG', pageW - 34, 5, 24, 24); } catch (e) {}
-    }
-
-    // Center titles
+    if (logos.left) { try { doc.addImage(logos.left, 'JPEG', 8, 4, 22, 22); } catch(e){} }
+    if (logos.right) { try { doc.addImage(logos.right, 'PNG', pageW - 30, 4, 22, 22); } catch(e){} }
     doc.setFontSize(9); doc.setFont(undefined, 'bold');
-    doc.text((inst.ministere || 'MINISTERE DES FINANCES').toUpperCase(), cX, 10, { align: 'center' });
+    doc.text((inst.ministere || 'MINISTERE DES FINANCES').toUpperCase(), cX, 9, { align: 'center' });
     doc.setFontSize(8);
-    doc.text('SECRETARIAT GENERAL', cX, 15, { align: 'center' });
-    doc.text((inst.categorie || "DIRECTION GENERALE DE L'ECOLE NATIONALE DES FINANCES").toUpperCase(), cX, 20, { align: 'center' });
-    doc.setFontSize(8);
-    doc.text('DIRECTION DES RESSOURCES', cX, 25, { align: 'center' });
-
-    // Horizontal line
-    doc.setDrawColor(0); doc.setLineWidth(0.5);
-    doc.line(10, 29, pageW - 10, 29);
-
-    // Report type + period
-    let y = 34;
-    doc.setFontSize(7.5); doc.setFont(undefined, 'normal');
-    doc.text('Type de Rapport :', cX - 2, y, { align: 'right' });
+    doc.text('SECRETARIAT GENERAL', cX, 14, { align: 'center' });
+    doc.text((inst.categorie || "DIRECTION GENERALE DE L'ECOLE NATIONALE DES FINANCES").toUpperCase(), cX, 19, { align: 'center' });
     doc.setFont(undefined, 'bold');
-    doc.text(' SYNTHESE DES PRESENCES DES AGENTS', cX - 1, y);
-    y += 4;
+    doc.text('DIRECTION DES RESSOURCES', cX, 24, { align: 'center' });
+    doc.setDrawColor(0); doc.setLineWidth(0.4);
+    doc.line(6, 27, pageW - 6, 27);
+    doc.setFontSize(7); doc.setFont(undefined, 'normal');
+    doc.text('Type de Rapport :', cX - 2, 31, { align: 'right' });
     doc.setFont(undefined, 'bold');
-    doc.text('Période : ' + periodLabel, cX, y, { align: 'center' });
-    y += 4;
-    doc.text('Nombre de jour de prestation : ' + nbJours, cX, y, { align: 'center' });
-
-    return y + 3;
+    doc.text(' SYNTHESE DES PRESENCES DES AGENTS', cX - 1, 31);
+    doc.text('Période : ' + periodLabel, cX, 35, { align: 'center' });
+    doc.text('Nombre de jour de prestation : ' + nbJours, cX, 39, { align: 'center' });
 }
 
 function _drawPdfFooter(doc, inst, pageW, pageH) {
-    const y = pageH - 5;
+    const y = pageH - 4;
     doc.setFontSize(5.5); doc.setFont(undefined, 'normal'); doc.setTextColor(100);
-    doc.text('LMDSoft', 10, y);
-    const email = 'Email : ' + (inst.email || 'info@enf-rdc.cd');
-    doc.setTextColor(255, 0, 0); doc.text(email, 45, y); doc.setTextColor(100);
+    doc.text('LMDSoft', 6, y);
+    doc.setTextColor(255, 0, 0);
+    doc.text('Email : ' + (inst.email || 'info@enf-rdc.cd'), 30, y);
+    doc.setTextColor(100);
     doc.text('Tél : ' + (inst.telephone || ''), pageW / 2, y, { align: 'center' });
-    doc.text('Site : ' + (inst.site || 'enf-rdc.cd'), pageW - 40, y);
-    doc.text('LMDSoft', pageW - 10, y, { align: 'right' });
+    doc.text('Site : ' + (inst.site || 'enf-rdc.cd'), pageW - 35, y);
+    doc.text('LMDSoft', pageW - 6, y, { align: 'right' });
     doc.setTextColor(0);
 }
 
 function _drawSignatures(doc, pageW, startY) {
-    let y = startY + 10;
-    doc.setFontSize(7.5); doc.setFont(undefined, 'normal');
-    doc.text('Chef de Division des Ress. Humaines', 50, y, { align: 'center' });
-    doc.text('Directeur des Ressources', pageW - 55, y, { align: 'center' });
-    y += 14;
-    doc.setFont(undefined, 'bold');
-    doc.text('____________________________', 50, y, { align: 'center' });
-    doc.text('____________________________', pageW - 55, y, { align: 'center' });
+    let y = startY + 8;
+    doc.setFontSize(7); doc.setFont(undefined, 'normal');
+    doc.text('Chef de Division des Ress. Humaines', pageW * 0.25, y, { align: 'center' });
+    doc.text('Directeur des Ressources', pageW * 0.75, y, { align: 'center' });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  PROFESSIONAL PDF EXPORT (ALWAYS LANDSCAPE A4)
+//  PROFESSIONAL PDF — EXACT REFERENCE LAYOUT
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function exportPresProPDF(days, label, filename) {
     if (!days || !days.length) return;
     const inst = await _getInstitution();
-
-    // Load logos as base64
     const logos = {
         left: await _loadImageAsBase64(inst.logo_pays_url || '/static/dashboard/img/logoRDC.jpg'),
         right: await _loadImageAsBase64(inst.logo_url || '/static/dashboard/img/logoENF.png')
@@ -186,9 +164,8 @@ async function exportPresProPDF(days, label, filename) {
     const overtimeMap = _buildOvertimeMap(days, agents);
     const dateStrs = days.map(d => d.jour);
     const nbJours = dateStrs.length;
-    const isMonthly = nbJours > 7;
 
-    // FIX 5: ALWAYS landscape
+    // ALWAYS landscape A4
     const doc = new jsPDF('l', 'mm', 'a4');
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
@@ -197,32 +174,56 @@ async function exportPresProPDF(days, label, filename) {
     const lastD = _fmtDateFR(dateStrs[dateStrs.length - 1]);
     const periodLabel = 'DU ' + firstD + ' AU ' + lastD;
 
-    // FIX 1: Fixed header height — reserve this space on EVERY page
-    const HDR_H = 48;
-
     // Draw header on first page
     _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW);
 
-    // ── Build table ─────────────────────────────────────────────────────
-    const dateCols = dateStrs.map(d => _fmtDateFR(d));
-    const fixedHead = ['#', 'Mat.', 'Nom & Postnom', 'Grade'];
-    const summaryHead = ['Nbre de\nPrésences\ncumulées', 'Nbre\nd\'Abs.\ncumulées', '%', 'Cumul des\nRetards\nen Heures'];
-    const fullHead = [...fixedHead, ...dateCols, ...summaryHead];
-
-    // Store date header labels for rotated drawing (indices 4 to 4+nbJours-1)
-    const dateColStart = 4;
-    const dateColEnd = 4 + nbJours;
-    // Summary column indices
+    // ── Reference columns: #, Mat.ENF, Nom&Postnom, Mat.FP, Grade, [dates...], NbrePrés, %, NbreAbs, %, CumulRetards
+    const FIXED = 5;  // fixed columns count
+    const SUM = 5;    // summary columns count
+    const dateColStart = FIXED;
+    const dateColEnd = FIXED + nbJours;
     const sumStart = dateColEnd;
+    const totalCols = FIXED + nbJours + SUM;
 
-    // Sub-header rows: Début, Fin, Durée
-    const mkSubRow = (lbl, val) => ['', '', '', lbl, ...dateStrs.map(() => val), '', '', '', ''];
-    const subRows = [mkSubRow('Début', '8h00'), mkSubRow('Fin', '16h00'), mkSubRow('Durée', '08h00')];
+    // Compute column widths to fill 100% page width
+    const M = 3; // minimal side margin
+    const usable = pageW - 2 * M;
+    const fixedW = [7, 16, 0, 14, 8]; // #, Mat, Name(auto), MatFP, Grade
+    const sumW = [8, 7, 8, 7, 11];    // NbrePrés, %, NbreAbs, %, Cumul
+    const fixedTotal = fixedW.reduce((a, b) => a + b, 0);
+    const sumTotal = sumW.reduce((a, b) => a + b, 0);
+    const dateW = Math.max(5, (usable - fixedTotal - sumTotal - 2) / nbJours);
+    fixedW[2] = usable - (fixedTotal + sumTotal + dateW * nbJours); // name gets remainder
+    if (fixedW[2] < 20) fixedW[2] = 20;
 
-    // Agent rows
+    // Column header labels
+    const dateCols = dateStrs.map(d => _fmtDateFR(d));
+    const fixedHead = ['#', 'Mat. ENF', 'Nom & Postnom', 'Mat. FP', 'Grade'];
+    const summaryHead = ['Nbre de Prése-\nnces cumulées', 'Nbre d\'Abse-\nnces cumulées', '%', 'Cumul des Retards\nen Heures', ''];
+    // Actually from reference: Nbre de Présences cumulées | Nbre | % | Nbre d'Absences cumulées | Cumul des Retards en Heures
+    // Let me match exactly: the 5 summary cols from data are: NbrePrés, %, NbreAbs, %, CumulRetards
+    const sumLabels = [
+        'Nbre de Prése-\nnces cumulées',
+        '%',
+        "Nbre d'Abse-\nnces cumulées",
+        '%',
+        'Cumul des Retards\nen Heures'
+    ];
+    const fullHead = [...fixedHead, ...dateCols, ...sumLabels];
+
+    // Sub-header rows (Début/Fin/Durée) — first 3 body rows
+    const mkSub = (lbl, val) => {
+        const r = ['', '', '', '', lbl];
+        for (let i = 0; i < nbJours; i++) r.push(val);
+        for (let i = 0; i < SUM; i++) r.push('');
+        return r;
+    };
+    const subRows = [mkSub('Début', '8h00'), mkSub('Fin', '16h00'), mkSub('Durée', '08h00')];
+
+    // Agent data rows — # starts at 121 like reference
     const bodyRows = [];
     agents.forEach((ag, i) => {
-        const row = [i + 1, ag.matricule, ag.agent, ag.grade_code];
+        const row = [121 + i, ag.matricule, ag.agent, ag.matriculeFP, ag.grade_code];
         let pres = 0, abs = 0;
         dateStrs.forEach(d => {
             const v = (matrix[ag.id] || {})[d] || '';
@@ -231,126 +232,131 @@ async function exportPresProPDF(days, label, filename) {
             if (v === 'A') abs++;
         });
         const tot = pres + abs;
-        row.push(pres, abs,
-                 tot ? ((pres / tot) * 100).toFixed(2) : '0',
-                 _fmtOTh(overtimeMap[ag.id]));
+        const presPct = tot ? ((pres / tot) * 100).toFixed(2) : '0';
+        const absPct = tot ? ((abs / tot) * 100).toFixed(2) : '0';
+        row.push(pres, presPct, abs, absPct, _fmtOTh(overtimeMap[ag.id]));
         bodyRows.push(row);
     });
 
     // Summary rows
-    const totPresRow = ['', '', 'Nbre Total des Presences', ''];
-    const pctPresRow = ['', '', '', '%'];
-    const totAbsRow = ['', '', 'Total des Absences', ''];
-    const pctAbsRow = ['', '', '', '%'];
+    const mkTotRow = (lbl) => { const r = ['', '', lbl, '', '']; return r; };
+    const totPresRow = mkTotRow('Nbre Total des Presences');
+    const pctPresRow = mkTotRow('%');
+    const totAbsRow = mkTotRow('Total des Absences');
+    const pctAbsRow = mkTotRow('%');
     let gP = 0, gA = 0;
     dateStrs.forEach(d => {
         let dP = 0, dA = 0;
         agents.forEach(ag => { const v = (matrix[ag.id] || {})[d] || ''; if (v === 'P') dP++; if (v === 'A') dA++; });
         const dT = dP + dA;
-        totPresRow.push(dP); pctPresRow.push(dT ? ((dP / dT) * 100).toFixed(2) : '0');
-        totAbsRow.push(dA); pctAbsRow.push(dT ? ((dA / dT) * 100).toFixed(2) : '0');
+        totPresRow.push(dP);
+        pctPresRow.push(dT ? ((dP / dT) * 100).toFixed(2) : '0');
+        totAbsRow.push(dA);
+        pctAbsRow.push(dT ? ((dA / dT) * 100).toFixed(2) : '0');
         gP += dP; gA += dA;
     });
     const gT = gP + gA;
-    const gPR = gT ? ((gP / gT) * 100).toFixed(2) : '0';
-    const gAR = gT ? ((gA / gT) * 100).toFixed(2) : '0';
-    totPresRow.push('', '', gPR + ' %', '');
-    pctPresRow.push('', '', '', '');
-    totAbsRow.push('', '', '', '');
-    pctAbsRow.push('', '', gAR + ' %', '');
+    const gPR = gT ? ((gP / gT) * 100).toFixed(2) + ' %' : '0';
+    const gAR = gT ? ((gA / gT) * 100).toFixed(2) + ' %' : '0';
+    // Fill summary cols for total rows
+    totPresRow.push('', '', '', '', gPR);
+    pctPresRow.push('', '', '', '', '');
+    totAbsRow.push('', '', '', '', '');
+    pctAbsRow.push('', '', '', '', gAR);
 
     const allBody = [...subRows, ...bodyRows, totPresRow, pctPresRow, totAbsRow, pctAbsRow];
 
-    // Column styles — FIX 4: all numerics centered, agent name left
-    const colW = isMonthly ? Math.min(7, (pageW - 90) / nbJours) : Math.min(9, (pageW - 90) / nbJours);
+    // Column styles — FULL WIDTH
     const cs = {};
-    cs[0] = { cellWidth: 7, halign: 'center' };           // #
-    cs[1] = { cellWidth: 16, halign: 'center' };           // Mat
-    cs[2] = { cellWidth: isMonthly ? 30 : 38, halign: 'left' }; // Nom — LEFT
-    cs[3] = { cellWidth: 10, halign: 'center' };           // Grade
-    for (let i = dateColStart; i < dateColEnd; i++) cs[i] = { cellWidth: colW, halign: 'center' };
-    cs[sumStart]     = { cellWidth: 10, halign: 'center' }; // Nbre Prés
-    cs[sumStart + 1] = { cellWidth: 10, halign: 'center' }; // Nbre Abs
-    cs[sumStart + 2] = { cellWidth: 9, halign: 'center' };  // %
-    cs[sumStart + 3] = { cellWidth: 13, halign: 'center' }; // Cumul
+    for (let i = 0; i < FIXED; i++) cs[i] = { cellWidth: fixedW[i], halign: i === 2 ? 'left' : 'center' };
+    for (let i = dateColStart; i < dateColEnd; i++) cs[i] = { cellWidth: dateW, halign: 'center' };
+    for (let i = 0; i < SUM; i++) cs[sumStart + i] = { cellWidth: sumW[i], halign: 'center' };
 
-    const fs = isMonthly ? 4.5 : 5.5;
+    const fs = nbJours > 20 ? 4 : (nbJours > 10 ? 4.5 : 5.5);
 
     doc.autoTable({
         startY: HDR_H,
         head: [fullHead],
         body: allBody,
         theme: 'grid',
-        styles: { fontSize: fs, cellPadding: 0.7, lineColor: [0, 0, 0], lineWidth: 0.15, textColor: [0, 0, 0], overflow: 'linebreak', valign: 'middle', halign: 'center' },
+        tableWidth: usable,
+        styles: {
+            fontSize: fs, cellPadding: 0.5, lineColor: [0, 0, 0], lineWidth: 0.15,
+            textColor: [0, 0, 0], overflow: 'linebreak', valign: 'middle', halign: 'center'
+        },
         headStyles: {
             fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold',
-            fontSize: isMonthly ? 3.5 : 4.5, halign: 'center', valign: 'bottom',
-            cellPadding: 0.6, minCellHeight: 18  // tall header for rotated text
+            fontSize: fs - 0.5, halign: 'center', valign: 'bottom',
+            cellPadding: 0.5, minCellHeight: 20
         },
         columnStyles: cs,
-        // FIX 3: Rotate date headers 90° + suppress default text for those cells
+        // Suppress text for rotated columns in header; style body rows
         didParseCell: function (data) {
             const ri = data.row.index, ci = data.column.index, val = data.cell.raw;
-            // Header row: hide date & summary text (will draw rotated in didDrawCell)
+            // Header: suppress date + summary text (drawn rotated in didDrawCell)
             if (data.row.section === 'head' && ci >= dateColStart) {
-                data.cell.text = []; // suppress default text rendering
+                data.cell.text = [];
             }
-            // Sub-header rows (Début/Fin/Durée)
+            // Sub-header rows (Début/Fin/Durée) — grey bg
             if (data.row.section === 'body' && ri < 3) {
-                data.cell.styles.fillColor = [235, 235, 235];
+                data.cell.styles.fillColor = [240, 240, 240];
                 data.cell.styles.fontStyle = 'bold';
                 data.cell.styles.fontSize = fs - 0.5;
             }
-            // Total rows at bottom
+            // Summary rows at bottom
             if (data.row.section === 'body' && ri >= 3 + agents.length) {
                 data.cell.styles.fontStyle = 'bold';
                 data.cell.styles.fillColor = [245, 245, 245];
             }
-            // P/A coloring in data rows
-            if (data.row.section === 'body' && ri >= 3 && ri < 3 + agents.length && ci >= dateColStart && ci < dateColEnd) {
-                if (val === 'P') data.cell.styles.textColor = [0, 100, 0];
-                if (val === 'A') { data.cell.styles.textColor = [200, 0, 0]; data.cell.styles.fontStyle = 'bold'; }
-            }
-            // Agent name stays LEFT
-            if (data.row.section === 'body' && ci === 2) {
-                data.cell.styles.halign = 'left';
+            // P/A coloring
+            if (data.row.section === 'body' && ri >= 3 && ri < 3 + agents.length) {
+                if (ci >= dateColStart && ci < dateColEnd) {
+                    if (val === 'P') data.cell.styles.textColor = [0, 100, 0];
+                    if (val === 'A') { data.cell.styles.textColor = [200, 0, 0]; data.cell.styles.fontStyle = 'bold'; }
+                }
+                // Agent name LEFT
+                if (ci === 2) data.cell.styles.halign = 'left';
             }
         },
-        // FIX 3: Draw rotated text for date + summary headers
+        // Draw rotated text for date + summary header cells
         didDrawCell: function (data) {
             if (data.row.section !== 'head') return;
             const ci = data.column.index;
             if (ci < dateColStart) return;
             const cell = data.cell;
-            const label = fullHead[ci];
+            const label = fullHead[ci] || '';
             if (!label) return;
-            doc.setFontSize(isMonthly ? 3.8 : 4.5);
+            doc.setFontSize(fs - 0.5);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(0, 0, 0);
-            const cx = cell.x + cell.width / 2;
-            const cy = cell.y + cell.height - 1.5;
-            doc.text(label, cx, cy, { angle: 90, align: 'left' });
+            const cx = cell.x + cell.width / 2 + 0.5;
+            const cy = cell.y + cell.height - 1;
+            doc.text(label.replace(/\n/g, ' '), cx, cy, { angle: 90, align: 'left' });
         },
-        // FIX 1: Fixed top margin = header height, prevents overlap on ALL pages
-        margin: { left: 4, right: 4, top: HDR_H, bottom: 28 },
-        // FIX 1: Redraw header on EVERY page (not just page > 1)
+        // Fixed top margin = header height on ALL pages
+        margin: { left: M, right: M, top: HDR_H, bottom: 22 },
         didDrawPage: function (data) {
-            if (data.pageNumber > 1) {
-                _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW);
-            }
+            if (data.pageNumber > 1) _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW);
             _drawPdfFooter(doc, inst, pageW, pageH);
         }
     });
 
-    const finalY = doc.lastAutoTable.finalY || (pageH - 40);
-    if (finalY + 30 > pageH - 10) { doc.addPage(); _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW); _drawSignatures(doc, pageW, 50); _drawPdfFooter(doc, inst, pageW, pageH); }
-    else _drawSignatures(doc, pageW, finalY);
+    // Signatures on last page
+    const finalY = doc.lastAutoTable.finalY || (pageH - 35);
+    if (finalY + 25 > pageH - 15) {
+        doc.addPage();
+        _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW);
+        _drawSignatures(doc, pageW, HDR_H + 5);
+        _drawPdfFooter(doc, inst, pageW, pageH);
+    } else {
+        _drawSignatures(doc, pageW, finalY);
+    }
 
     doc.save(filename + '.pdf');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  PROFESSIONAL EXCEL EXPORT (WEEKLY / MONTHLY)
+//  PROFESSIONAL EXCEL EXPORT
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function exportPresProXls(days, label, filename) {
@@ -375,13 +381,13 @@ async function exportPresProXls(days, label, filename) {
     rows.push([]);
 
     const dateCols = dateStrs.map(d => _fmtDateFR(d));
-    rows.push(['#', 'Matricule', 'Nom & Postnom', 'Grade', ...dateCols, 'Nbre Prés.', '%', 'Nbre Abs.', '%', 'Cumul Retards']);
-    rows.push(['', '', '', 'Début', ...dateStrs.map(() => '8h00'), '', '', '', '', '']);
-    rows.push(['', '', '', 'Fin', ...dateStrs.map(() => '16h00'), '', '', '', '', '']);
-    rows.push(['', '', '', 'Durée', ...dateStrs.map(() => '08h00'), '', '', '', '', '']);
+    rows.push(['#', 'Mat. ENF', 'Nom & Postnom', 'Mat. FP', 'Grade', ...dateCols, 'Nbre Prés.', '%', 'Nbre Abs.', '%', 'Cumul Retards']);
+    rows.push(['', '', '', '', 'Début', ...dateStrs.map(() => '8h00'), '', '', '', '', '']);
+    rows.push(['', '', '', '', 'Fin', ...dateStrs.map(() => '16h00'), '', '', '', '', '']);
+    rows.push(['', '', '', '', 'Durée', ...dateStrs.map(() => '08h00'), '', '', '', '', '']);
 
     agents.forEach((ag, i) => {
-        const row = [i + 1, ag.matricule, ag.agent, ag.grade_code];
+        const row = [121 + i, ag.matricule, ag.agent, ag.matriculeFP, ag.grade_code];
         let pres = 0, abs = 0;
         dateStrs.forEach(d => { const v = (matrix[ag.id] || {})[d] || ''; row.push(v); if (v === 'P') pres++; if (v === 'A') abs++; });
         const t = pres + abs;
@@ -389,7 +395,7 @@ async function exportPresProXls(days, label, filename) {
         rows.push(row);
     });
 
-    const tPR = ['', '', 'Nbre Total Présences', ''], tAR = ['', '', 'Total Absences', ''];
+    const tPR = ['', '', 'Nbre Total Présences', '', ''], tAR = ['', '', 'Total Absences', '', ''];
     let gP = 0, gA = 0;
     dateStrs.forEach(d => {
         let dP = 0, dA = 0;
@@ -404,7 +410,7 @@ async function exportPresProXls(days, label, filename) {
     rows.push(['', '', 'Chef de Division des Ress. Humaines', '', '', '', '', '', '', '', '', '', 'Directeur des Ressources']);
 
     const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(rows);
-    const cols = [{ wch: 5 }, { wch: 14 }, { wch: 32 }, { wch: 8 }];
+    const cols = [{ wch: 5 }, { wch: 14 }, { wch: 30 }, { wch: 12 }, { wch: 8 }];
     for (let i = 0; i < nbJours; i++) cols.push({ wch: 10 });
     cols.push({ wch: 8 }, { wch: 7 }, { wch: 8 }, { wch: 7 }, { wch: 12 });
     ws['!cols'] = cols;
@@ -413,9 +419,7 @@ async function exportPresProXls(days, label, filename) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  WRAPPERS — Called from dashboard.js / carriere.js
-//  For weekly/monthly → professional format
-//  For daily → falls back to legacy simple export
+//  WRAPPERS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const _MOIS_EXPORT = {1:'Janvier',2:'Fevrier',3:'Mars',4:'Avril',5:'Mai',6:'Juin',7:'Juillet',8:'Aout',9:'Septembre',10:'Octobre',11:'Novembre',12:'Decembre'};
@@ -424,10 +428,8 @@ function _resolvePresData(source, mois, wi, di) {
     const store = (source === 'carr') ? (window._carrPresData || {}) : (window._persData || {});
     const data = store[mois];
     if (!data) return null;
-
     if (di !== undefined) return { days: [data.weeks[wi].days[di]], label: data.weeks[wi].days[di].jour, fname: 'Presences_' + data.weeks[wi].days[di].jour, isDaily: true };
     if (wi !== undefined) return { days: data.weeks[wi].days, label: data.weeks[wi].label, fname: 'Presences_Semaine_' + data.weeks[wi].key, isDaily: false };
-
     const p = mois.split('-');
     return { days: data.days, label: (_MOIS_EXPORT[parseInt(p[1])] || '') + ' ' + p[0], fname: 'Presences_' + mois, isDaily: false };
 }
@@ -436,7 +438,6 @@ function exportPresProPDFWrapper(source, mois, wi, di) {
     const r = _resolvePresData(source, mois, wi, di);
     if (!r) return;
     if (r.isDaily) {
-        // Daily → legacy export (no change needed)
         if (source === 'carr') { if (typeof exportCarrPresPDF === 'function') exportCarrPresPDF(mois, wi, di); }
         else { if (typeof exportPersPDF === 'function') exportPersPDF(mois, wi, di); }
         return;
