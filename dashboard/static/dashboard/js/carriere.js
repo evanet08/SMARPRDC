@@ -453,7 +453,7 @@ function getWeekRange(dateStr){
 }
 
 // Data store for exports
-let _carrPresData = {};
+var _carrPresData = {};
 const PRES_HDR = ['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','H.Supp'];
 
 function _presRows(days){

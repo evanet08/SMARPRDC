@@ -372,7 +372,7 @@ function rateBadge(taux) {
     return `<strong style="color:${c}">${taux}%</strong>`;
 }
 
-let _persData = {}; // month -> { days, weeks } stored for exports
+var _persData = {}; // month -> { days, weeks } stored for exports (var: accessible from exports_pro.js via window)
 
 async function loadPresencePersonnel() {
     const wrap = document.getElementById('pres-personnel-wrap');
