@@ -458,18 +458,17 @@ def presence_personnel_detail(request):
                         le = last_entry
                 arr_s = parse_t(fe) if fe else None
                 hd_s = parse_t(info['coupon_heureD'])
-                present = arr_s is not None and arr_s <= hd_s + tolerance_h * 3600
-                overtime = ''
-                overtime_s = 0
-                if fe and le:
-                    worked = parse_t(le) - parse_t(fe)
-                    if worked > 8 * 3600:
-                        extra = worked - 8 * 3600
-                        overtime_s = int(extra)
-                        overtime = f"{int(extra//3600)}h{int((extra%3600)//60):02d}"
+                threshold_s = hd_s + tolerance_h * 3600
+                present = arr_s is not None and arr_s <= threshold_s
+                retard_str = ''
+                retard_s = 0
+                # Retard = arrival AFTER threshold
+                if arr_s is not None and arr_s > threshold_s:
+                    retard_s = int(arr_s - threshold_s)
+                    retard_str = f"{int(retard_s//3600)}h{int((retard_s%3600)//60):02d}"
                 day_list.append({'agent': pers['agent'], **_pinfo, 'arrivee': fmt_t(fe),
                                  'depart': fmt_t(le), 'present': present,
-                                 'heures_sup': overtime, 'overtime_s': overtime_s,
+                                 'heures_sup': retard_str, 'overtime_s': retard_s,
                                  'justifie': None, 'motif': '', 'id_justificatif': None,
                                  'non_disponible': False, 'motif_indisponibilite': ''})
             else:

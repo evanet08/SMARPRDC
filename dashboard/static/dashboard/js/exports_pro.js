@@ -205,28 +205,32 @@ async function exportPresProPDF(days, label, filename) {
     // Column header labels
     const dateCols = dateStrs.map(d => _fmtDateFR(d));
     const fixedHead = ['#', 'Mat. ENF', 'Nom & Postnom', 'Mat. FP', 'Grade'];
-    const summaryHead = ['Nbre de Prése-\nnces cumulées', 'Nbre d\'Abse-\nnces cumulées', '%', 'Cumul des Retards\nen Heures', ''];
-    // Actually from reference: Nbre de Présences cumulées | Nbre | % | Nbre d'Absences cumulées | Cumul des Retards en Heures
-    // Let me match exactly: the 5 summary cols from data are: NbrePrés, %, NbreAbs, %, CumulRetards
     const sumLabels = [
-        'Nbre de Prése-\nnces cumulées',
+        'Nbre de Présences cumulées',
         '%',
-        "Nbre d'Abse-\nnces cumulées",
+        "Nbre d'Absences cumulées",
         '%',
-        'Cumul des Retards\nen Heures'
+        'Cumul des Retards en Heures'
     ];
     const fullHead = [...fixedHead, ...dateCols, ...sumLabels];
 
-    // Sub-header rows (Début/Fin/Durée) — first 3 body rows
-    const mkSub = (lbl, val) => {
-        const r = ['', '', '', '', lbl];
+    // Multi-row header: row0 = main, rows 1-3 = Début/Fin/Durée (merged for fixed+summary cols)
+    const mkHeadSub = (lbl, val) => {
+        const r = [];
+        for (let i = 0; i < FIXED; i++) r.push('');   // empty = merged with row0
         for (let i = 0; i < nbJours; i++) r.push(val);
-        for (let i = 0; i < SUM; i++) r.push('');
+        for (let i = 0; i < SUM; i++) r.push('');      // empty = merged with row0
+        r[FIXED - 1] = lbl;  // Label in Grade column position
         return r;
     };
-    const subRows = [mkSub('Début', '8h00'), mkSub('Fin', '16h00'), mkSub('Durée', '08h00')];
+    const headRows = [
+        fullHead,
+        mkHeadSub('Début', '8h00'),
+        mkHeadSub('Fin', '16h00'),
+        mkHeadSub('Durée', '08h00')
+    ];
 
-    // Agent data rows
+    // Agent data rows (NO sub-rows in body — they're in head now)
     const bodyRows = [];
     agents.forEach((ag, i) => {
         const row = [i + 1, ag.matricule, ag.agent, ag.matriculeFP, ag.grade_code];
@@ -264,25 +268,25 @@ async function exportPresProPDF(days, label, filename) {
     const gT = gP + gA;
     const gPR = gT ? ((gP / gT) * 100).toFixed(2) + ' %' : '0';
     const gAR = gT ? ((gA / gT) * 100).toFixed(2) + ' %' : '0';
-    // Fill summary cols for total rows
     totPresRow.push('', '', '', '', gPR);
     pctPresRow.push('', '', '', '', '');
     totAbsRow.push('', '', '', '', '');
     pctAbsRow.push('', '', '', '', gAR);
 
-    const allBody = [...subRows, ...bodyRows, totPresRow, pctPresRow, totAbsRow, pctAbsRow];
+    const allBody = [...bodyRows, totPresRow, pctPresRow, totAbsRow, pctAbsRow];
 
-    // Column styles — FULL WIDTH
+    // Column styles
     const cs = {};
     for (let i = 0; i < FIXED; i++) cs[i] = { cellWidth: fixedW[i], halign: i === 2 ? 'left' : 'center' };
     for (let i = dateColStart; i < dateColEnd; i++) cs[i] = { cellWidth: DATE_CW, halign: 'center' };
     for (let i = 0; i < SUM; i++) cs[sumStart + i] = { cellWidth: sumW[i], halign: 'center' };
 
     const fs = nbJours > 20 ? 4 : (nbJours > 10 ? 4.5 : 5.5);
+    const agentCount = agents.length;
 
     doc.autoTable({
         startY: HDR_H,
-        head: [fullHead],
+        head: headRows,
         body: allBody,
         theme: 'grid',
         tableWidth: usable,
@@ -292,31 +296,52 @@ async function exportPresProPDF(days, label, filename) {
         },
         headStyles: {
             fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold',
-            fontSize: fs - 0.5, halign: 'center', valign: 'bottom',
-            cellPadding: 0.5, minCellHeight: 20
+            fontSize: fs - 0.5, halign: 'center', valign: 'middle',
+            cellPadding: 0.5
         },
         columnStyles: cs,
-        // Suppress text for rotated columns in header; style body rows
         didParseCell: function (data) {
             const ri = data.row.index, ci = data.column.index, val = data.cell.raw;
-            // Header: suppress date + summary text (drawn rotated in didDrawCell)
-            if (data.row.section === 'head' && ci >= dateColStart) {
-                data.cell.text = [];
+
+            if (data.row.section === 'head') {
+                // Row 0: suppress date + summary text (drawn rotated in didDrawCell)
+                if (ri === 0 && ci >= dateColStart) {
+                    data.cell.text = [];
+                    data.cell.styles.minCellHeight = 20;
+                }
+                // Row 0: fixed column headers — tall for rowspan effect
+                if (ri === 0 && ci < dateColStart) {
+                    data.cell.styles.minCellHeight = 20;
+                    data.cell.styles.valign = 'middle';
+                }
+                // Rows 1-3: merged cells for fixed cols (0-3) and summary cols → hide borders+text
+                if (ri > 0 && (ci < FIXED - 1 || ci >= sumStart)) {
+                    data.cell.text = [];
+                    data.cell.styles.lineWidth = 0;
+                    data.cell.styles.fillColor = [255, 255, 255];
+                }
+                // Rows 1-3: Grade column (FIXED-1) shows Début/Fin/Durée label
+                if (ri > 0 && ci === FIXED - 1) {
+                    data.cell.styles.fillColor = [240, 240, 240];
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.fontSize = fs - 0.5;
+                }
+                // Rows 1-3: date columns show 8h00/16h00/08h00
+                if (ri > 0 && ci >= dateColStart && ci < dateColEnd) {
+                    data.cell.styles.fillColor = [240, 240, 240];
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.fontSize = fs - 0.5;
+                }
             }
-            // Sub-header rows (Début/Fin/Durée) — grey bg
-            if (data.row.section === 'body' && ri < 3) {
-                data.cell.styles.fillColor = [240, 240, 240];
-                data.cell.styles.fontStyle = 'bold';
-                data.cell.styles.fontSize = fs - 0.5;
-            }
-            // Summary rows at bottom
-            if (data.row.section === 'body' && ri >= 3 + agents.length) {
-                data.cell.styles.fontStyle = 'bold';
-                data.cell.styles.fillColor = [245, 245, 245];
-            }
-            // P/A coloring
-            if (data.row.section === 'body' && ri >= 3 && ri < 3 + agents.length) {
-                if (ci >= dateColStart && ci < dateColEnd) {
+
+            if (data.row.section === 'body') {
+                // Summary rows at bottom
+                if (ri >= agentCount) {
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.fillColor = [245, 245, 245];
+                }
+                // P/A coloring
+                if (ri < agentCount && ci >= dateColStart && ci < dateColEnd) {
                     if (val === 'P') data.cell.styles.textColor = [0, 100, 0];
                     if (val === 'A') { data.cell.styles.textColor = [200, 0, 0]; data.cell.styles.fontStyle = 'bold'; }
                 }
@@ -324,9 +349,9 @@ async function exportPresProPDF(days, label, filename) {
                 if (ci === 2) data.cell.styles.halign = 'left';
             }
         },
-        // Draw rotated text for date + summary header cells
+        // Draw rotated text for date + summary header cells (row 0 only)
         didDrawCell: function (data) {
-            if (data.row.section !== 'head') return;
+            if (data.row.section !== 'head' || data.row.index !== 0) return;
             const ci = data.column.index;
             if (ci < dateColStart) return;
             const cell = data.cell;
@@ -339,7 +364,6 @@ async function exportPresProPDF(days, label, filename) {
             const cy = cell.y + cell.height - 1;
             doc.text(label.replace(/\n/g, ' '), cx, cy, { angle: 90, align: 'left' });
         },
-        // Fixed top margin = header height on ALL pages
         margin: { left: M, right: M, top: HDR_H, bottom: 22 },
         didDrawPage: function (data) {
             if (data.pageNumber > 1) _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW);
