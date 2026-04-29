@@ -167,7 +167,7 @@ function _drawSignatures(doc, pageW, startY) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  PROFESSIONAL PDF EXPORT (WEEKLY = Portrait, MONTHLY = Landscape)
+//  PROFESSIONAL PDF EXPORT (ALWAYS LANDSCAPE A4)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function exportPresProPDF(days, label, filename) {
@@ -188,8 +188,8 @@ async function exportPresProPDF(days, label, filename) {
     const nbJours = dateStrs.length;
     const isMonthly = nbJours > 7;
 
-    const orient = isMonthly ? 'l' : 'p';
-    const doc = new jsPDF(orient, 'mm', 'a4');
+    // FIX 5: ALWAYS landscape
+    const doc = new jsPDF('l', 'mm', 'a4');
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
 
@@ -197,16 +197,26 @@ async function exportPresProPDF(days, label, filename) {
     const lastD = _fmtDateFR(dateStrs[dateStrs.length - 1]);
     const periodLabel = 'DU ' + firstD + ' AU ' + lastD;
 
-    const startY = _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW);
+    // FIX 1: Fixed header height — reserve this space on EVERY page
+    const HDR_H = 48;
+
+    // Draw header on first page
+    _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW);
 
     // ── Build table ─────────────────────────────────────────────────────
     const dateCols = dateStrs.map(d => _fmtDateFR(d));
     const fixedHead = ['#', 'Mat.', 'Nom & Postnom', 'Grade'];
-    const summaryHead = ['Nbre\nPrés.', '%', 'Nbre\nAbs.', '%', 'Cumul\nRetards\nen Heures'];
+    const summaryHead = ['Nbre de\nPrésences\ncumulées', 'Nbre\nd\'Abs.\ncumulées', '%', 'Cumul des\nRetards\nen Heures'];
     const fullHead = [...fixedHead, ...dateCols, ...summaryHead];
 
+    // Store date header labels for rotated drawing (indices 4 to 4+nbJours-1)
+    const dateColStart = 4;
+    const dateColEnd = 4 + nbJours;
+    // Summary column indices
+    const sumStart = dateColEnd;
+
     // Sub-header rows: Début, Fin, Durée
-    const mkSubRow = (lbl, val) => ['', '', '', lbl, ...dateStrs.map(() => val), '', '', '', '', ''];
+    const mkSubRow = (lbl, val) => ['', '', '', lbl, ...dateStrs.map(() => val), '', '', '', ''];
     const subRows = [mkSubRow('Début', '8h00'), mkSubRow('Fin', '16h00'), mkSubRow('Durée', '08h00')];
 
     // Agent rows
@@ -221,8 +231,8 @@ async function exportPresProPDF(days, label, filename) {
             if (v === 'A') abs++;
         });
         const tot = pres + abs;
-        row.push(pres, tot ? ((pres / tot) * 100).toFixed(2) : '0',
-                 abs, tot ? ((abs / tot) * 100).toFixed(2) : '0',
+        row.push(pres, abs,
+                 tot ? ((pres / tot) * 100).toFixed(2) : '0',
                  _fmtOTh(overtimeMap[ag.id]));
         bodyRows.push(row);
     });
@@ -244,50 +254,90 @@ async function exportPresProPDF(days, label, filename) {
     const gT = gP + gA;
     const gPR = gT ? ((gP / gT) * 100).toFixed(2) : '0';
     const gAR = gT ? ((gA / gT) * 100).toFixed(2) : '0';
-    totPresRow.push('', '', '', '', gPR + ' %');
-    pctPresRow.push('', '', '', '', '');
-    totAbsRow.push('', '', '', '', '');
-    pctAbsRow.push('', '', '', '', gAR + ' %');
+    totPresRow.push('', '', gPR + ' %', '');
+    pctPresRow.push('', '', '', '');
+    totAbsRow.push('', '', '', '');
+    pctAbsRow.push('', '', gAR + ' %', '');
 
     const allBody = [...subRows, ...bodyRows, totPresRow, pctPresRow, totAbsRow, pctAbsRow];
 
-    // Column styles
-    const colW = isMonthly ? Math.min(7, (pageW - 90) / nbJours) : Math.min(11, (pageW - 100) / nbJours);
+    // Column styles — FIX 4: all numerics centered, agent name left
+    const colW = isMonthly ? Math.min(7, (pageW - 90) / nbJours) : Math.min(9, (pageW - 90) / nbJours);
     const cs = {};
-    cs[0] = { cellWidth: 7 };
-    cs[1] = { cellWidth: isMonthly ? 16 : 20 };
-    cs[2] = { cellWidth: isMonthly ? 30 : 40 };
-    cs[3] = { cellWidth: isMonthly ? 10 : 12 };
-    for (let i = 4; i < 4 + nbJours; i++) cs[i] = { cellWidth: colW, halign: 'center' };
-    const sb = 4 + nbJours;
-    cs[sb] = { cellWidth: 9, halign: 'center' };
-    cs[sb + 1] = { cellWidth: 8, halign: 'center' };
-    cs[sb + 2] = { cellWidth: 9, halign: 'center' };
-    cs[sb + 3] = { cellWidth: 8, halign: 'center' };
-    cs[sb + 4] = { cellWidth: 13, halign: 'center' };
+    cs[0] = { cellWidth: 7, halign: 'center' };           // #
+    cs[1] = { cellWidth: 16, halign: 'center' };           // Mat
+    cs[2] = { cellWidth: isMonthly ? 30 : 38, halign: 'left' }; // Nom — LEFT
+    cs[3] = { cellWidth: 10, halign: 'center' };           // Grade
+    for (let i = dateColStart; i < dateColEnd; i++) cs[i] = { cellWidth: colW, halign: 'center' };
+    cs[sumStart]     = { cellWidth: 10, halign: 'center' }; // Nbre Prés
+    cs[sumStart + 1] = { cellWidth: 10, halign: 'center' }; // Nbre Abs
+    cs[sumStart + 2] = { cellWidth: 9, halign: 'center' };  // %
+    cs[sumStart + 3] = { cellWidth: 13, halign: 'center' }; // Cumul
 
     const fs = isMonthly ? 4.5 : 5.5;
 
     doc.autoTable({
-        startY: startY,
+        startY: HDR_H,
         head: [fullHead],
         body: allBody,
         theme: 'grid',
-        styles: { fontSize: fs, cellPadding: 0.7, lineColor: [0, 0, 0], lineWidth: 0.15, textColor: [0, 0, 0], overflow: 'linebreak', valign: 'middle' },
-        headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: isMonthly ? 4 : 5, halign: 'center', valign: 'bottom', cellPadding: 0.8 },
+        styles: { fontSize: fs, cellPadding: 0.7, lineColor: [0, 0, 0], lineWidth: 0.15, textColor: [0, 0, 0], overflow: 'linebreak', valign: 'middle', halign: 'center' },
+        headStyles: {
+            fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold',
+            fontSize: isMonthly ? 3.5 : 4.5, halign: 'center', valign: 'bottom',
+            cellPadding: 0.6, minCellHeight: 18  // tall header for rotated text
+        },
         columnStyles: cs,
+        // FIX 3: Rotate date headers 90° + suppress default text for those cells
         didParseCell: function (data) {
             const ri = data.row.index, ci = data.column.index, val = data.cell.raw;
-            if (ri < 3) { data.cell.styles.fillColor = [235, 235, 235]; data.cell.styles.fontStyle = 'bold'; data.cell.styles.fontSize = fs - 0.5; }
-            if (ri >= 3 + agents.length) { data.cell.styles.fontStyle = 'bold'; data.cell.styles.fillColor = [245, 245, 245]; }
-            if (ri >= 3 && ri < 3 + agents.length && ci >= 4 && ci < 4 + nbJours) {
+            // Header row: hide date & summary text (will draw rotated in didDrawCell)
+            if (data.row.section === 'head' && ci >= dateColStart) {
+                data.cell.text = []; // suppress default text rendering
+            }
+            // Sub-header rows (Début/Fin/Durée)
+            if (data.row.section === 'body' && ri < 3) {
+                data.cell.styles.fillColor = [235, 235, 235];
+                data.cell.styles.fontStyle = 'bold';
+                data.cell.styles.fontSize = fs - 0.5;
+            }
+            // Total rows at bottom
+            if (data.row.section === 'body' && ri >= 3 + agents.length) {
+                data.cell.styles.fontStyle = 'bold';
+                data.cell.styles.fillColor = [245, 245, 245];
+            }
+            // P/A coloring in data rows
+            if (data.row.section === 'body' && ri >= 3 && ri < 3 + agents.length && ci >= dateColStart && ci < dateColEnd) {
                 if (val === 'P') data.cell.styles.textColor = [0, 100, 0];
                 if (val === 'A') { data.cell.styles.textColor = [200, 0, 0]; data.cell.styles.fontStyle = 'bold'; }
             }
+            // Agent name stays LEFT
+            if (data.row.section === 'body' && ci === 2) {
+                data.cell.styles.halign = 'left';
+            }
         },
-        margin: { left: 4, right: 4, bottom: 28 },
+        // FIX 3: Draw rotated text for date + summary headers
+        didDrawCell: function (data) {
+            if (data.row.section !== 'head') return;
+            const ci = data.column.index;
+            if (ci < dateColStart) return;
+            const cell = data.cell;
+            const label = fullHead[ci];
+            if (!label) return;
+            doc.setFontSize(isMonthly ? 3.8 : 4.5);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(0, 0, 0);
+            const cx = cell.x + cell.width / 2;
+            const cy = cell.y + cell.height - 1.5;
+            doc.text(label, cx, cy, { angle: 90, align: 'left' });
+        },
+        // FIX 1: Fixed top margin = header height, prevents overlap on ALL pages
+        margin: { left: 4, right: 4, top: HDR_H, bottom: 28 },
+        // FIX 1: Redraw header on EVERY page (not just page > 1)
         didDrawPage: function (data) {
-            if (data.pageNumber > 1) _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW);
+            if (data.pageNumber > 1) {
+                _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW);
+            }
             _drawPdfFooter(doc, inst, pageW, pageH);
         }
     });
