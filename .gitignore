@@ -25,3 +25,9 @@ env/
 ## OS
 .DS_Store
 Thumbs.db
+
+# Root-level image assets (not part of the app)
+*.png
+*.jpg
+*.jpeg
+!dashboard/static/dashboard/img/*
