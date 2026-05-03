@@ -251,6 +251,13 @@ def presence_personnel_detail(request):
     if not mois:
         return Response({'error': 'Paramètre mois requis'}, status=400)
 
+    # ── Pre-compute month boundaries for date-range queries ──────────
+    parts_pre = mois.split('-')
+    year_pre, month_pre = int(parts_pre[0]), int(parts_pre[1])
+    _, last_day_pre = calendar.monthrange(year_pre, month_pre)
+    month_start_str = f"{mois}-01"
+    month_end_str = f"{mois}-{last_day_pre:02d}"
+
     with connection.cursor() as cursor:
         cursor.execute("SELECT valeur FROM personnel_pointage_retardacademique LIMIT 1")
         tol_row = cursor.fetchone()
@@ -309,7 +316,7 @@ def presence_personnel_detail(request):
             JOIN personnel p ON p.id_personnel = pc.id_personnel
             WHERE p.isAdministratif = 1 AND p.en_fonction = 1 AND p.id_personnel != 1
               AND pc.enddate >= %s AND pc.startdate <= %s
-        """, [f"{mois}-01", f"{mois}-31"])
+        """, [month_start_str, month_end_str])
         conge_rows = _dictfetchall(cursor)
         # Build lookup: id_personnel → list of (startdate, enddate) ranges
         conge_map = {}
@@ -398,10 +405,8 @@ def presence_personnel_detail(request):
         elif r['type_pointage'] == 2:
             days_data[jour][aid]['exits'].append(r['heure'])
 
-    # Determine all business days in the month
-    parts = mois.split('-')
-    year_v, month_v = int(parts[0]), int(parts[1])
-    _, last_day = calendar.monthrange(year_v, month_v)
+    # Determine all business days in the month (reuse pre-computed boundaries)
+    year_v, month_v, last_day = year_pre, month_pre, last_day_pre
     today = date.today()
     all_days_in_month = []
     for d in range(1, last_day + 1):

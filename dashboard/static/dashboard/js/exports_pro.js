@@ -189,18 +189,35 @@ async function exportPresProPDF(days, label, filename) {
     const sumStart = dateColEnd;
     const totalCols = FIXED + nbJours + SUM;
 
-    // Column widths: dates & stats get FIXED narrow width, identification columns absorb rest
+    // Column widths: equitable distribution across the full page width
+    // Strategy: cap the Name column, then distribute remaining space
+    // proportionally between date columns and summary columns.
     const M = 3; // side margin
     const usable = pageW - 2 * M;
-    const DATE_CW = 7;  // each date column: fixed 7mm
-    const sumW = [8, 7, 8, 7, 11]; // NbrePrés, %, NbreAbs, %, Cumul (fixed narrow)
-    const sumTotal = sumW.reduce((a, b) => a + b, 0);
-    const dateTotalW = DATE_CW * nbJours;
-    const idRemain = usable - dateTotalW - sumTotal; // space for identification cols
-    // Distribute identification space: #(6), Mat.ENF(15), Nom(flex), Mat.FP(13), Grade(8)
-    const fixMinW = 6 + 15 + 13 + 8; // 42mm for #,Mat,MatFP,Grade
-    const nameW = Math.max(25, idRemain - fixMinW);
-    const fixedW = [6, 15, nameW, 13, 8];
+
+    // Fixed identification columns (non-flexible): #, Mat.ENF, Mat.FP, Grade
+    const ID_NUM_W = 6, ID_MAT_W = 15, ID_MATFP_W = 13, ID_GRADE_W = 8;
+    const fixedIdNoName = ID_NUM_W + ID_MAT_W + ID_MATFP_W + ID_GRADE_W; // 42mm
+
+    // Base proportions (used as weights for proportional distribution)
+    const DATE_CW_BASE = 7;
+    const sumBaseW = [8, 7, 8, 7, 11]; // NbrePrés, %, NbreAbs, %, Cumul
+    const sumBaseTotal = sumBaseW.reduce((a, b) => a + b, 0); // 41mm
+
+    // Name column: flexible but CAPPED to prevent absorbing all space
+    const NAME_MAX = nbJours <= 7 ? 55 : 65;
+    const NAME_MIN = 25;
+    const nameRaw = usable - fixedIdNoName - DATE_CW_BASE * nbJours - sumBaseTotal;
+    const nameW = Math.min(NAME_MAX, Math.max(NAME_MIN, nameRaw));
+
+    // Remaining space → distributed proportionally to dates + summary columns
+    const remaining = usable - fixedIdNoName - nameW;
+    const totalWeight = DATE_CW_BASE * nbJours + sumBaseTotal;
+    const scale = remaining / totalWeight;
+    const DATE_CW = Math.round(DATE_CW_BASE * scale * 10) / 10;
+    const sumW = sumBaseW.map(w => Math.round(w * scale * 10) / 10);
+
+    const fixedW = [ID_NUM_W, ID_MAT_W, nameW, ID_MATFP_W, ID_GRADE_W];
 
     // Column header labels
     const dateCols = dateStrs.map(d => _fmtDateFR(d));

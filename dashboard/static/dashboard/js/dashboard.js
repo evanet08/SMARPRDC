@@ -671,6 +671,8 @@ function _persRows(mois, wi, di) {
     const rows = [];
     days.forEach(day => {
         day.agents.forEach(a => {
+            // Skip non-disponible personnel (congé, état non-EnFx)
+            if (a.non_disponible) return;
             let justLabel = '—';
             if (!a.present) justLabel = a.justifie ? 'Oui' : 'Non';
             rows.push([a.agent, a.matricule||'—', a.matriculeFP||'—', a.grade_code||'—', a.genre||'—', a.recrutement_date||'—', day.jour, a.arrivee || '—', a.depart || '—', a.present ? 'Oui' : 'Non', justLabel, a.motif || '', a.heures_sup || '']);

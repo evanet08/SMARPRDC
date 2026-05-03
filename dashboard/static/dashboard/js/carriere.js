@@ -459,6 +459,8 @@ const PRES_HDR = ['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','
 function _presRows(days){
     const rows=[];
     days.forEach(day=>{day.agents.forEach(a=>{
+        // Skip non-disponible personnel (congé, état non-EnFx)
+        if(a.non_disponible) return;
         rows.push([a.agent,a.matricule||'—',a.matriculeFP||'—',a.grade_code||'—',a.genre||'—',a.recrutement_date||'—',day.jour,a.arrivee||'—',a.depart||'—',a.present?'Oui':'Non',a.heures_sup||'']);
     });});
     return rows;
