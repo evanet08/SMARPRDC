@@ -677,7 +677,7 @@ function _persRows(mois, wi, di) {
             if (a.non_disponible) return;
             let justLabel = '—';
             if (!a.present) justLabel = a.justifie ? 'Oui' : 'Non';
-            rows.push([a.agent, a.matricule||'—', a.matriculeFP||'—', a.grade_code||'—', a.genre||'—', a.recrutement_date||'—', day.jour, a.arrivee || '—', a.depart || '—', a.present ? 'Oui' : 'Non', justLabel, a.motif || '', a.heures_sup || '']);
+            rows.push([a.agent, a.matricule||'—', a.matriculeFP||'—', a.grade_code||'—', a.genre||'—', a.recrutement_date||'—', day.jour, a.arrivee || '—', a.depart || '—', a.present ? 'Oui' : 'Non', justLabel, a.motif || '', a.heures_retard || '', a.heures_sup || '']);
         });
     });
     return rows;
@@ -728,7 +728,7 @@ function exportPersPDF(mois, wi, di) {
     if (di !== undefined) label = _persData[mois].weeks[wi].days[di].jour;
     else if (wi !== undefined) label = _persData[mois].weeks[wi].label;
     const { doc } = _pdfDoc('Présences Personnel — ' + label);
-    doc.autoTable({ startY: 25, head: [['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','Justifié','Motif','H.Supp']], body: rows, styles: { fontSize: 6, cellPadding: 1.2 }, headStyles: { fillColor: [16,185,129] } });
+    doc.autoTable({ startY: 25, head: [['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','Justifié','Motif','H.Retard','H.Sup']], body: rows, styles: { fontSize: 6, cellPadding: 1.2 }, headStyles: { fillColor: [16,185,129] } });
     doc.save('Personnel_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf');
 }
 function exportPersXls(mois, wi, di) {
@@ -738,8 +738,8 @@ function exportPersXls(mois, wi, di) {
     if (di !== undefined) label = _persData[mois].weeks[wi].days[di].jour;
     else if (wi !== undefined) label = _persData[mois].weeks[wi].label;
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','Justifié','Motif','H.Supp'], ...rows]);
-    ws['!cols'] = [{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:25},{wch:12}];
+    const ws = XLSX.utils.aoa_to_sheet([['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','Justifié','Motif','H.Retard','H.Sup'], ...rows]);
+    ws['!cols'] = [{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:25},{wch:12},{wch:12}];
     XLSX.utils.book_append_sheet(wb, ws, 'Personnel');
     XLSX.writeFile(wb, 'Personnel_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.xlsx');
 }

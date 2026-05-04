@@ -191,7 +191,7 @@ async function exportPresProPDF(days, label, filename) {
     const periodLabel = 'DU ' + firstD + ' AU ' + lastD;
     _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW);
 
-    // 6 summary columns: PresNbre, Pres%, AbsNbre, Abs%, HeuresRetardCum, HeuresSupCum
+    // 6 summary columns: Prés.Nbre, Prés.%, Abs.Nbre, Abs.%, RetardCum, SupCum
     const FIXED = 5;
     const SUM = 6;
     const dateColStart = FIXED;
@@ -221,14 +221,8 @@ async function exportPresProPDF(days, label, filename) {
 
     const dateCols = dateStrs.map(d => _fmtDateFR(d));
     const fixedHead = ['#', 'Mat. ENF', 'Nom & Postnom', 'Mat. FP', 'Grade'];
-    const sumLabels = [
-        'Présences Cumulées',
-        '%',
-        'Absences Cumulées',
-        '%',
-        'Heures Retard\nCumulées',
-        'Heures Sup\nCumulées'
-    ];
+    // Short labels for rotated text — group titles drawn manually in didDrawCell
+    const sumLabels = ['Nbre', '%', 'Nbre', '%', 'Heures Retard Cumulées', 'Heures Sup Cumulées'];
     const fullHead = [...fixedHead, ...dateCols, ...sumLabels];
 
     const mkHeadSub = (lbl, val) => {
@@ -263,7 +257,6 @@ async function exportPresProPDF(days, label, filename) {
         bodyRows.push(row);
     });
 
-    // Summary rows
     const mkTotRow = (lbl) => { const r = ['', '', lbl, '', '']; return r; };
     const totPresRow = mkTotRow('Nbre Total des Presences');
     const pctPresRow = mkTotRow('%');
@@ -296,7 +289,11 @@ async function exportPresProPDF(days, label, filename) {
     for (let i = 0; i < SUM; i++) cs[sumStart + i] = { cellWidth: sumW[i], halign: 'center' };
 
     const fs = nbJours <= 7 ? 7 : (nbJours <= 15 ? 5.5 : (nbJours <= 22 ? 4.5 : 4));
+    const HDR_CELL_H = 28; // taller header row to fit rotated text without overflow
     const agentCount = agents.length;
+
+    // Track first-page header cell positions for manual group titles
+    let _sumCellPositions = {};
 
     doc.autoTable({
         startY: HDR_H,
@@ -316,12 +313,13 @@ async function exportPresProPDF(days, label, filename) {
         didParseCell: function (data) {
             const ri = data.row.index, ci = data.column.index, val = data.cell.raw;
             if (data.row.section === 'head') {
+                // Row 0: all date+summary cells — suppress text, set tall height
                 if (ri === 0 && ci >= dateColStart) {
                     data.cell.text = [];
-                    data.cell.styles.minCellHeight = 20;
+                    data.cell.styles.minCellHeight = HDR_CELL_H;
                 }
                 if (ri === 0 && ci < dateColStart) {
-                    data.cell.styles.minCellHeight = 20;
+                    data.cell.styles.minCellHeight = HDR_CELL_H;
                     data.cell.styles.valign = 'middle';
                 }
                 // Rows 1-3: hide fixed cols (0-3) and summary cols (rowspan=4 effect)
@@ -358,14 +356,66 @@ async function exportPresProPDF(days, label, filename) {
             const ci = data.column.index;
             if (ci < dateColStart) return;
             const cell = data.cell;
-            const label = fullHead[ci] || '';
-            if (!label) return;
-            doc.setFontSize(fs - 0.5);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0);
-            const cx = cell.x + cell.width / 2 + 0.5;
-            const cy = cell.y + cell.height - 1;
-            doc.text(label.replace(/\n/g, ' '), cx, cy, { angle: 90, align: 'left' });
+
+            // Store summary cell positions for group title drawing
+            if (ci >= sumStart) {
+                _sumCellPositions[ci] = { x: cell.x, y: cell.y, w: cell.width, h: cell.height };
+            }
+
+            // Date columns: rotated date labels
+            if (ci >= dateColStart && ci < dateColEnd) {
+                const label = dateCols[ci - dateColStart] || '';
+                if (!label) return;
+                doc.setFontSize(fs - 0.5);
+                doc.setFont(undefined, 'bold');
+                doc.setTextColor(0, 0, 0);
+                const cx = cell.x + cell.width / 2 + 0.5;
+                const cy = cell.y + cell.height - 1;
+                doc.text(label, cx, cy, { angle: 90, align: 'left' });
+            }
+
+            // Summary columns 4,5 (Retard, Sup): rotated text
+            if (ci === sumStart + 4 || ci === sumStart + 5) {
+                const lbl = ci === sumStart + 4 ? 'Heures Retard Cumulées' : 'Heures Sup Cumulées';
+                doc.setFontSize(fs - 0.5);
+                doc.setFont(undefined, 'bold');
+                doc.setTextColor(0, 0, 0);
+                const cx = cell.x + cell.width / 2 + 0.5;
+                const cy = cell.y + cell.height - 1;
+                doc.text(lbl, cx, cy, { angle: 90, align: 'left' });
+            }
+
+            // Summary columns 0,1 (Prés Nbre, %): sub-labels "Nbre" / "%" horizontal at bottom
+            // Summary columns 2,3 (Abs Nbre, %): same
+            if (ci >= sumStart && ci <= sumStart + 3) {
+                const subLabel = (ci === sumStart || ci === sumStart + 2) ? 'Nbre' : '%';
+                doc.setFontSize(fs - 1);
+                doc.setFont(undefined, 'bold');
+                doc.setTextColor(0, 0, 0);
+                const cx = cell.x + cell.width / 2;
+                const cy = cell.y + cell.height - 1.5;
+                doc.text(subLabel, cx, cy, { align: 'center' });
+            }
+
+            // After last summary cell drawn: draw group titles spanning 2 cols
+            if (ci === sumStart + 5) {
+                const p0 = _sumCellPositions[sumStart];
+                const p1 = _sumCellPositions[sumStart + 1];
+                const p2 = _sumCellPositions[sumStart + 2];
+                const p3 = _sumCellPositions[sumStart + 3];
+                if (p0 && p1 && p2 && p3) {
+                    doc.setFontSize(fs);
+                    doc.setFont(undefined, 'bold');
+                    doc.setTextColor(0, 0, 0);
+                    // "Présences Cumulées" spanning cols 0-1
+                    const presCx = p0.x + (p0.w + p1.w) / 2;
+                    const presRotY = p0.y + p0.h - 1;
+                    doc.text('Présences Cumulées', presCx + 0.5, presRotY, { angle: 90, align: 'left' });
+                    // "Absences Cumulées" spanning cols 2-3
+                    const absCx = p2.x + (p2.w + p3.w) / 2;
+                    doc.text('Absences Cumulées', absCx + 0.5, presRotY, { angle: 90, align: 'left' });
+                }
+            }
         },
         margin: { left: M, right: M, top: HDR_H, bottom: 22 },
         didDrawPage: function (data) {

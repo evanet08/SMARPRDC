@@ -469,9 +469,9 @@ def presence_personnel_detail(request):
                 present = arr_s is not None and arr_s <= threshold_s
                 retard_str = ''
                 retard_s = 0
-                # Retard = arrival AFTER threshold
-                if arr_s is not None and arr_s > threshold_s:
-                    retard_s = int(arr_s - threshold_s)
+                # Retard = arrivée après heureD (ex: arrivée 10h43, heureD 8h00 → retard 2h43)
+                if arr_s is not None and arr_s > hd_s:
+                    retard_s = int(arr_s - hd_s)
                     retard_str = f"{int(retard_s//3600)}h{int((retard_s%3600)//60):02d}"
                 # Heures Sup = (dernière sortie – première entrée) – 8h, 0 si négatif
                 hsup_str = ''
