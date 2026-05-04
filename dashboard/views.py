@@ -443,6 +443,7 @@ def presence_personnel_detail(request):
                 # - Shown with 'non_disponible' flag for frontend display
                 day_list.append({'agent': pers['agent'], **_pinfo, 'arrivee': '—',
                                  'depart': '—', 'present': False,
+                                 'heures_retard': '', 'retard_s': 0,
                                  'heures_sup': '', 'overtime_s': 0,
                                  'justifie': None, 'motif': '', 'id_justificatif': None,
                                  'non_disponible': True, 'motif_indisponibilite': unavail_reason})
@@ -462,6 +463,7 @@ def presence_personnel_detail(request):
                     if gap > 4 * 3600:
                         le = last_entry
                 arr_s = parse_t(fe) if fe else None
+                dep_s = parse_t(le) if le else None
                 hd_s = parse_t(info['coupon_heureD'])
                 threshold_s = hd_s + tolerance_h * 3600
                 present = arr_s is not None and arr_s <= threshold_s
@@ -471,9 +473,19 @@ def presence_personnel_detail(request):
                 if arr_s is not None and arr_s > threshold_s:
                     retard_s = int(arr_s - threshold_s)
                     retard_str = f"{int(retard_s//3600)}h{int((retard_s%3600)//60):02d}"
+                # Heures Sup = (dernière sortie – première entrée) – 8h, 0 si négatif
+                hsup_str = ''
+                hsup_s = 0
+                if arr_s is not None and dep_s is not None:
+                    worked_s = dep_s - arr_s
+                    overtime_raw = worked_s - 8 * 3600  # 8h standard
+                    if overtime_raw > 0:
+                        hsup_s = int(overtime_raw)
+                        hsup_str = f"{int(hsup_s//3600)}h{int((hsup_s%3600)//60):02d}"
                 day_list.append({'agent': pers['agent'], **_pinfo, 'arrivee': fmt_t(fe),
                                  'depart': fmt_t(le), 'present': present,
-                                 'heures_sup': retard_str, 'overtime_s': retard_s,
+                                 'heures_retard': retard_str, 'retard_s': retard_s,
+                                 'heures_sup': hsup_str, 'overtime_s': hsup_s,
                                  'justifie': None, 'motif': '', 'id_justificatif': None,
                                  'non_disponible': False, 'motif_indisponibilite': ''})
             else:
@@ -482,6 +494,7 @@ def presence_personnel_detail(request):
                 jdata = just_map.get(jk, {'id_justificatif': None, 'justifie': False, 'motif': ''})
                 day_list.append({'agent': pers['agent'], **_pinfo, 'arrivee': '—',
                                  'depart': '—', 'present': False,
+                                 'heures_retard': '', 'retard_s': 0,
                                  'heures_sup': '', 'overtime_s': 0,
                                  'justifie': jdata['justifie'], 'motif': jdata['motif'],
                                  'id_justificatif': jdata['id_justificatif'],

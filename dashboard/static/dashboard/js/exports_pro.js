@@ -94,6 +94,18 @@ function _buildOvertimeMap(days, agents) {
     return map;
 }
 
+function _buildRetardMap(days, agents) {
+    const map = {};
+    agents.forEach(ag => { map[ag.id] = 0; });
+    days.forEach(day => {
+        day.agents.forEach(a => {
+            if (a.non_disponible || !map.hasOwnProperty(a.id_personnel)) return;
+            map[a.id_personnel] += (a.retard_s || 0);
+        });
+    });
+    return map;
+}
+
 function _fmtOTh(secs) {
     if (!secs) return '';
     const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
@@ -166,10 +178,10 @@ async function exportPresProPDF(days, label, filename) {
     const agents = _buildAgentIndex(days);
     const matrix = _buildPresenceMatrix(days, agents);
     const overtimeMap = _buildOvertimeMap(days, agents);
+    const retardMap = _buildRetardMap(days, agents);
     const dateStrs = days.map(d => d.jour);
     const nbJours = dateStrs.length;
 
-    // ALWAYS landscape A4
     const doc = new jsPDF('l', 'mm', 'a4');
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
@@ -177,67 +189,54 @@ async function exportPresProPDF(days, label, filename) {
     const firstD = _fmtDateFR(dateStrs[0]);
     const lastD = _fmtDateFR(dateStrs[dateStrs.length - 1]);
     const periodLabel = 'DU ' + firstD + ' AU ' + lastD;
-
-    // Draw header on first page
     _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW);
 
-    // ── Reference columns: #, Mat.ENF, Nom&Postnom, Mat.FP, Grade, [dates...], NbrePrés, %, NbreAbs, %, CumulRetards
-    const FIXED = 5;  // fixed columns count
-    const SUM = 5;    // summary columns count
+    // 6 summary columns: PresNbre, Pres%, AbsNbre, Abs%, HeuresRetardCum, HeuresSupCum
+    const FIXED = 5;
+    const SUM = 6;
     const dateColStart = FIXED;
     const dateColEnd = FIXED + nbJours;
     const sumStart = dateColEnd;
-    const totalCols = FIXED + nbJours + SUM;
 
-    // Column widths: equitable distribution across the full page width
-    // Strategy: cap the Name column, then distribute remaining space
-    // proportionally between date columns and summary columns.
-    const M = 3; // side margin
+    const M = 3;
     const usable = pageW - 2 * M;
-
-    // Fixed identification columns (non-flexible): #, Mat.ENF, Mat.FP, Grade
     const ID_NUM_W = 6, ID_MAT_W = 15, ID_MATFP_W = 13, ID_GRADE_W = 8;
-    const fixedIdNoName = ID_NUM_W + ID_MAT_W + ID_MATFP_W + ID_GRADE_W; // 42mm
+    const fixedIdNoName = ID_NUM_W + ID_MAT_W + ID_MATFP_W + ID_GRADE_W;
 
-    // Base proportions (used as weights for proportional distribution)
     const DATE_CW_BASE = 7;
-    const sumBaseW = [8, 7, 8, 7, 11]; // NbrePrés, %, NbreAbs, %, Cumul
-    const sumBaseTotal = sumBaseW.reduce((a, b) => a + b, 0); // 41mm
+    const sumBaseW = [8, 7, 8, 7, 11, 11];
+    const sumBaseTotal = sumBaseW.reduce((a, b) => a + b, 0);
 
-    // Name column: flexible but CAPPED to prevent absorbing all space
     const NAME_MAX = nbJours <= 7 ? 55 : 65;
     const NAME_MIN = 25;
     const nameRaw = usable - fixedIdNoName - DATE_CW_BASE * nbJours - sumBaseTotal;
     const nameW = Math.min(NAME_MAX, Math.max(NAME_MIN, nameRaw));
 
-    // Remaining space → distributed proportionally to dates + summary columns
     const remaining = usable - fixedIdNoName - nameW;
     const totalWeight = DATE_CW_BASE * nbJours + sumBaseTotal;
     const scale = remaining / totalWeight;
     const DATE_CW = Math.round(DATE_CW_BASE * scale * 10) / 10;
     const sumW = sumBaseW.map(w => Math.round(w * scale * 10) / 10);
-
     const fixedW = [ID_NUM_W, ID_MAT_W, nameW, ID_MATFP_W, ID_GRADE_W];
 
-    // Column header labels
     const dateCols = dateStrs.map(d => _fmtDateFR(d));
     const fixedHead = ['#', 'Mat. ENF', 'Nom & Postnom', 'Mat. FP', 'Grade'];
     const sumLabels = [
-        'Nbre de Présences cumulées',
+        'Présences Cumulées',
         '%',
-        "Nbre d'Absences cumulées",
+        'Absences Cumulées',
         '%',
-        'Cumul des Retards en Heures'
+        'Heures Retard\nCumulées',
+        'Heures Sup\nCumulées'
     ];
     const fullHead = [...fixedHead, ...dateCols, ...sumLabels];
 
-    // Multi-row header: row0 = main, rows 1-3 = Début/Fin/Durée (merged for fixed+summary cols)
     const mkHeadSub = (lbl, val) => {
         const r = [];
-        for (let i = 0; i < FIXED; i++) r.push('');   // empty = merged with row0
+        for (let i = 0; i < FIXED; i++) r.push('');
         for (let i = 0; i < nbJours; i++) r.push(val);
-        for (let i = 0; i < SUM; i++) r.push('');      // empty = merged with row0
-        r[FIXED - 1] = lbl;  // Label in Grade column position
+        for (let i = 0; i < SUM; i++) r.push('');
+        r[FIXED - 1] = lbl;
         return r;
     };
     const headRows = [
@@ -247,7 +246,6 @@ async function exportPresProPDF(days, label, filename) {
         mkHeadSub('Durée', '08h00')
     ];
 
-    // Agent data rows (NO sub-rows in body — they're in head now)
     const bodyRows = [];
     agents.forEach((ag, i) => {
         const row = [i + 1, ag.matricule, ag.agent, ag.matriculeFP, ag.grade_code];
@@ -261,7 +259,7 @@ async function exportPresProPDF(days, label, filename) {
         const tot = pres + abs;
         const presPct = tot ? ((pres / tot) * 100).toFixed(2) : '0';
         const absPct = tot ? ((abs / tot) * 100).toFixed(2) : '0';
-        row.push(pres, presPct, abs, absPct, _fmtOTh(overtimeMap[ag.id]));
+        row.push(pres, presPct, abs, absPct, _fmtOTh(retardMap[ag.id]), _fmtOTh(overtimeMap[ag.id]));
         bodyRows.push(row);
     });
 
@@ -285,20 +283,18 @@ async function exportPresProPDF(days, label, filename) {
     const gT = gP + gA;
     const gPR = gT ? ((gP / gT) * 100).toFixed(2) + ' %' : '0';
     const gAR = gT ? ((gA / gT) * 100).toFixed(2) + ' %' : '0';
-    totPresRow.push('', '', '', '', gPR);
-    pctPresRow.push('', '', '', '', '');
-    totAbsRow.push('', '', '', '', '');
-    pctAbsRow.push('', '', '', '', gAR);
+    totPresRow.push('', '', '', '', gPR, '');
+    pctPresRow.push('', '', '', '', '', '');
+    totAbsRow.push('', '', '', '', '', '');
+    pctAbsRow.push('', '', '', '', '', gAR);
 
     const allBody = [...bodyRows, totPresRow, pctPresRow, totAbsRow, pctAbsRow];
 
-    // Column styles
     const cs = {};
     for (let i = 0; i < FIXED; i++) cs[i] = { cellWidth: fixedW[i], halign: i === 2 ? 'left' : 'center' };
     for (let i = dateColStart; i < dateColEnd; i++) cs[i] = { cellWidth: DATE_CW, halign: 'center' };
     for (let i = 0; i < SUM; i++) cs[sumStart + i] = { cellWidth: sumW[i], halign: 'center' };
 
-    // Font size: bigger for weekly (few cols), smaller for monthly (many cols)
     const fs = nbJours <= 7 ? 7 : (nbJours <= 15 ? 5.5 : (nbJours <= 22 ? 4.5 : 4));
     const agentCount = agents.length;
 
@@ -314,60 +310,49 @@ async function exportPresProPDF(days, label, filename) {
         },
         headStyles: {
             fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold',
-            fontSize: fs - 0.5, halign: 'center', valign: 'middle',
-            cellPadding: 0.5
+            fontSize: fs - 0.5, halign: 'center', valign: 'middle', cellPadding: 0.5
         },
         columnStyles: cs,
         didParseCell: function (data) {
             const ri = data.row.index, ci = data.column.index, val = data.cell.raw;
-
             if (data.row.section === 'head') {
-                // Row 0: suppress date + summary text (drawn rotated in didDrawCell)
                 if (ri === 0 && ci >= dateColStart) {
                     data.cell.text = [];
                     data.cell.styles.minCellHeight = 20;
                 }
-                // Row 0: fixed column headers — tall for rowspan effect
                 if (ri === 0 && ci < dateColStart) {
                     data.cell.styles.minCellHeight = 20;
                     data.cell.styles.valign = 'middle';
                 }
-                // Rows 1-3: merged cells for fixed cols (0-3) and summary cols → hide borders+text
+                // Rows 1-3: hide fixed cols (0-3) and summary cols (rowspan=4 effect)
                 if (ri > 0 && (ci < FIXED - 1 || ci >= sumStart)) {
                     data.cell.text = [];
                     data.cell.styles.lineWidth = 0;
                     data.cell.styles.fillColor = [255, 255, 255];
                 }
-                // Rows 1-3: Grade column (FIXED-1) shows Début/Fin/Durée label
                 if (ri > 0 && ci === FIXED - 1) {
                     data.cell.styles.fillColor = [240, 240, 240];
                     data.cell.styles.fontStyle = 'bold';
                     data.cell.styles.fontSize = fs - 0.5;
                 }
-                // Rows 1-3: date columns show 8h00/16h00/08h00
                 if (ri > 0 && ci >= dateColStart && ci < dateColEnd) {
                     data.cell.styles.fillColor = [240, 240, 240];
                     data.cell.styles.fontStyle = 'bold';
                     data.cell.styles.fontSize = fs - 0.5;
                 }
             }
-
             if (data.row.section === 'body') {
-                // Summary rows at bottom
                 if (ri >= agentCount) {
                     data.cell.styles.fontStyle = 'bold';
                     data.cell.styles.fillColor = [245, 245, 245];
                 }
-                // P/A coloring
                 if (ri < agentCount && ci >= dateColStart && ci < dateColEnd) {
                     if (val === 'P') data.cell.styles.textColor = [0, 100, 0];
                     if (val === 'A') { data.cell.styles.textColor = [200, 0, 0]; data.cell.styles.fontStyle = 'bold'; }
                 }
-                // Agent name LEFT
                 if (ci === 2) data.cell.styles.halign = 'left';
             }
         },
-        // Draw rotated text for date + summary header cells (row 0 only)
         didDrawCell: function (data) {
             if (data.row.section !== 'head' || data.row.index !== 0) return;
             const ci = data.column.index;
@@ -389,7 +374,6 @@ async function exportPresProPDF(days, label, filename) {
         }
     });
 
-    // Signatures on last page
     const finalY = doc.lastAutoTable.finalY || (pageH - 35);
     if (finalY + 25 > pageH - 15) {
         doc.addPage();
@@ -413,6 +397,7 @@ async function exportPresProXls(days, label, filename) {
     const agents = _buildAgentIndex(days);
     const matrix = _buildPresenceMatrix(days, agents);
     const overtimeMap = _buildOvertimeMap(days, agents);
+    const retardMap = _buildRetardMap(days, agents);
     const dateStrs = days.map(d => d.jour);
     const nbJours = dateStrs.length;
     const firstD = _fmtDateFR(dateStrs[0]), lastD = _fmtDateFR(dateStrs[dateStrs.length - 1]);
@@ -429,17 +414,17 @@ async function exportPresProXls(days, label, filename) {
     rows.push([]);
 
     const dateCols = dateStrs.map(d => _fmtDateFR(d));
-    rows.push(['#', 'Mat. ENF', 'Nom & Postnom', 'Mat. FP', 'Grade', ...dateCols, 'Nbre Prés.', '%', 'Nbre Abs.', '%', 'Cumul Retards']);
-    rows.push(['', '', '', '', 'Début', ...dateStrs.map(() => '8h00'), '', '', '', '', '']);
-    rows.push(['', '', '', '', 'Fin', ...dateStrs.map(() => '16h00'), '', '', '', '', '']);
-    rows.push(['', '', '', '', 'Durée', ...dateStrs.map(() => '08h00'), '', '', '', '', '']);
+    rows.push(['#', 'Mat. ENF', 'Nom & Postnom', 'Mat. FP', 'Grade', ...dateCols, 'Nbre Prés.', '%', 'Nbre Abs.', '%', 'Cumul Retards', 'Cumul H. Sup']);
+    rows.push(['', '', '', '', 'Début', ...dateStrs.map(() => '8h00'), '', '', '', '', '', '']);
+    rows.push(['', '', '', '', 'Fin', ...dateStrs.map(() => '16h00'), '', '', '', '', '', '']);
+    rows.push(['', '', '', '', 'Durée', ...dateStrs.map(() => '08h00'), '', '', '', '', '', '']);
 
     agents.forEach((ag, i) => {
         const row = [i + 1, ag.matricule, ag.agent, ag.matriculeFP, ag.grade_code];
         let pres = 0, abs = 0;
         dateStrs.forEach(d => { const v = (matrix[ag.id] || {})[d] || ''; row.push(v); if (v === 'P') pres++; if (v === 'A') abs++; });
         const t = pres + abs;
-        row.push(pres, t ? ((pres / t) * 100).toFixed(2) : '0', abs, t ? ((abs / t) * 100).toFixed(2) : '0', _fmtOTh(overtimeMap[ag.id]));
+        row.push(pres, t ? ((pres / t) * 100).toFixed(2) : '0', abs, t ? ((abs / t) * 100).toFixed(2) : '0', _fmtOTh(retardMap[ag.id]), _fmtOTh(overtimeMap[ag.id]));
         rows.push(row);
     });
 
@@ -451,18 +436,18 @@ async function exportPresProXls(days, label, filename) {
         tPR.push(dP); tAR.push(dA); gP += dP; gA += dA;
     });
     const gT = gP + gA;
-    tPR.push('', gT ? ((gP / gT) * 100).toFixed(2) + ' %' : '0', '', '', '');
-    tAR.push('', '', '', gT ? ((gA / gT) * 100).toFixed(2) + ' %' : '0', '');
+    tPR.push('', gT ? ((gP / gT) * 100).toFixed(2) + ' %' : '0', '', '', '', '');
+    tAR.push('', '', '', gT ? ((gA / gT) * 100).toFixed(2) + ' %' : '0', '', '');
     rows.push(tPR); rows.push(tAR);
     rows.push([]); rows.push([]);
-    rows.push(['', '', 'Chef de Division des Ress. Humaines', '', '', '', '', '', '', '', '', '', 'Directeur des Ressources']);
+    rows.push(['', '', 'Chef de Division des Ress. Humaines', '', '', '', '', '', '', '', '', '', '', 'Directeur des Ressources']);
     rows.push([]);
-    rows.push(['', '', 'MUNGA SAFI RITA', '', '', '', '', '', '', '', '', '', 'TANDU SAVA Hippolyte']);
+    rows.push(['', '', 'MUNGA SAFI RITA', '', '', '', '', '', '', '', '', '', '', 'TANDU SAVA Hippolyte']);
 
     const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(rows);
     const cols = [{ wch: 5 }, { wch: 14 }, { wch: 30 }, { wch: 12 }, { wch: 8 }];
     for (let i = 0; i < nbJours; i++) cols.push({ wch: 10 });
-    cols.push({ wch: 8 }, { wch: 7 }, { wch: 8 }, { wch: 7 }, { wch: 12 });
+    cols.push({ wch: 8 }, { wch: 7 }, { wch: 8 }, { wch: 7 }, { wch: 12 }, { wch: 12 });
     ws['!cols'] = cols;
     XLSX.utils.book_append_sheet(wb, ws, 'Présences');
     XLSX.writeFile(wb, filename + '.xlsx');
