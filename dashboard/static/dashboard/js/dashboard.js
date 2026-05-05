@@ -869,6 +869,17 @@ async function exportPersPDF(mois, wi, di) {
     const retardPct = totalPresents ? ((totalRetard / totalPresents) * 100).toFixed(2) : '0.00';
     doc.text('  ' + totalRetard + ' sur ' + totalPresents + ', soit ' + retardPct + ' %', synthX - 2, fy);
 
+    // ── Signataires ──
+    fy += 12;
+    if (fy + 20 > pageH - 16) { doc.addPage(); fy = 15; needNewPage = true; }
+    doc.setFontSize(7); doc.setFont(undefined, 'normal'); doc.setTextColor(0);
+    doc.text('Chef de Division des Ress. Humaines', pageW * 0.25, fy, { align: 'center' });
+    doc.text('Directeur des Ressources', pageW * 0.75, fy, { align: 'center' });
+    fy += 10;
+    doc.setFont(undefined, 'bold');
+    doc.text('MUNGA SAFI RITA', pageW * 0.25, fy, { align: 'center' });
+    doc.text('TANDU SAVA Hippolyte', pageW * 0.75, fy, { align: 'center' });
+
     // Draw footer on the synthesis page if new page was added
     if (needNewPage) drawFooter(doc, doc.internal.getNumberOfPages());
 
