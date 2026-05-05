@@ -608,26 +608,23 @@ async function exportCarrPresPDF(mois,wi,di){
 
     // Footer helper
     function drawFoot(d,pgNum){
-        const footY=pageH-12;
+        const footY=pageH-8;
         const cX=pageW/2;
-        // Border-top line
         d.setDrawColor(0);d.setLineWidth(0.5);
         d.line(M,footY-2,pageW-M,footY-2);
-        // Left column: right-aligned to center
         d.setFontSize(7);d.setFont(undefined,'bold');d.setTextColor(30);
-        d.text('Présence des agents gérées conjointement par',cX-2,footY+1,{align:'right'});
-        d.text('SMAPRDC et LMDSoft conçues et propulsées par NEXORA TECH',cX-2,footY+5,{align:'right'});
-        // Right column: left-aligned from center
+        d.text('Générées conjointement par SMAPRDC et LMDSoft, propulsées par NEXORA TECH',cX-3,footY+1,{align:'right'});
         d.setFontSize(7);d.setFont(undefined,'bold');
         d.setTextColor(37,99,235);
-        d.text('✉ info@enf-rdc.cd',cX+2,footY+1);
+        d.text('✉ info@enf-rdc.cd',cX+3,footY+1);
+        const emailW=d.getTextWidth('✉ info@enf-rdc.cd');
         d.setTextColor(16,185,129);
-        d.text('☎ (+243) 994 034 954',cX+2,footY+5);
+        d.text('☎ (+243) 994 034 954',cX+3+emailW+4,footY+1);
+        const phoneW=d.getTextWidth('☎ (+243) 994 034 954');
         d.setTextColor(99,102,241);
-        d.text('🌐 enf-rdc.cd',cX+45,footY+5);
-        // Page number
-        d.setFontSize(6.5);d.setFont(undefined,'bold');d.setTextColor(80);
-        d.text('— Page '+pgNum+' —',cX,footY+9,{align:'center'});
+        d.text('🌐 enf-rdc.cd',cX+3+emailW+4+phoneW+4,footY+1);
+        d.setFontSize(6);d.setFont(undefined,'bold');d.setTextColor(80);
+        d.text('— Page '+pgNum+' —',cX,footY+5,{align:'center'});
         d.setTextColor(0);
     }
 
@@ -636,7 +633,7 @@ async function exportCarrPresPDF(mois,wi,di){
         head:[PRES_HDR],body:rows,
         styles:{fontSize:6,cellPadding:1.2,lineColor:[0,0,0],lineWidth:0.1,textColor:[0,0,0]},
         headStyles:{fillColor:[16,185,129],textColor:[255,255,255]},
-        margin:{left:M,right:M,top:sy,bottom:22},
+        margin:{left:M,right:M,top:sy,bottom:16},
         didDrawPage:function(d){
             drawFoot(doc,d.pageNumber);
             if(d.pageNumber===1)d.settings.margin.top=10;
