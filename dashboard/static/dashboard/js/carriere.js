@@ -498,28 +498,85 @@ async function _carrPdfDocInst(title){
 
 async function exportCarrPresPDF(mois,wi,di){
     const data=_carrPresData[mois];if(!data)return;
-    let days,label=mois;
-    if(di!==undefined){days=[data.weeks[wi].days[di]];label=data.weeks[wi].days[di].jour;}
-    else if(wi!==undefined){days=data.weeks[wi].days;label=data.weeks[wi].label;}
-    else{days=data.days;const p=mois.split('-');label=MOIS_FR[parseInt(p[1])]+' '+p[0];}
+    let days,label=mois,dateConcernee=mois;
+    if(di!==undefined){days=[data.weeks[wi].days[di]];label=data.weeks[wi].days[di].jour;dateConcernee=label;}
+    else if(wi!==undefined){days=data.weeks[wi].days;label=data.weeks[wi].label;dateConcernee=days.map(d=>d.jour).join(', ');}
+    else{days=data.days;const p=mois.split('-');label=MOIS_FR[parseInt(p[1])]+' '+p[0];dateConcernee=mois;}
     const rows=_presRows(days);if(!rows.length)return;
+
+    // Compute stats
+    let totalAgents=data.total_expected||0;
+    let totalPresents=0,totalAbsents=0,totalRetard=0;
+    days.forEach(day=>{totalPresents+=day.presents;totalAbsents+=day.absents;totalRetard+=(day.retard_count||0);});
+    const nbDays=days.length;
+    const seuil=data.seuil_absence||'11h00';
+    function fmtDateC(d){const p=d.split('-');return p.length===3?p[2]+'-'+p[1]+'-'+p[0]:d;}
+
     const {doc,startY,drawHeader,pageW,pageH,M}=await _carrPdfDocInst('Présences Personnel — '+label);
+
+    // Sub-header
+    let sy=startY;
+    const lbX=pageW/2-5;
+    doc.setFontSize(7.5);doc.setFont(undefined,'bold');
+    doc.text('Type de Rapport :',lbX,sy,{align:'right'});
+    doc.setFont(undefined,'normal');doc.setFontSize(8);
+    doc.text('  SYNTHESE JOURNALIERE DES PRESENCES DES AGENTS',lbX,sy);
+    sy+=5;
+    doc.setFont(undefined,'bold');doc.setFontSize(7.5);
+    doc.text('Date Concernée :',lbX,sy,{align:'right'});
+    doc.setFont(undefined,'normal');doc.setFontSize(8);
+    doc.text('  '+fmtDateC(dateConcernee),lbX,sy);
+    sy+=5;
+    doc.setFont(undefined,'bold');doc.setFontSize(7.5);
+    doc.text('Décompte des absences :',lbX,sy,{align:'right'});
+    doc.setFont(undefined,'normal');doc.setFontSize(8);
+    doc.text('  à partir de  '+seuil,lbX,sy);
+    sy+=7;
+
+    // Footer helper
+    function drawFoot(d,pgNum){
+        const footY=pageH-6;
+        d.setFontSize(4.8);d.setFont(undefined,'italic');d.setTextColor(80);
+        d.text('Présence des agents gérées conjointement par SMAPRDC et LMDSoft conçues et propulsées par NEXORA TECH',M+1,footY);
+        d.setFontSize(4.5);d.setFont(undefined,'normal');
+        d.text('✉ info@enf-rdc.cd  |  ☎ (+243)994034954  |  🌐 enf-rdc.cd',pageW-M-1,footY,{align:'right'});
+        d.setFontSize(5);d.setFont(undefined,'bold');d.setTextColor(120);
+        d.text('Page '+pgNum,pageW/2,footY+3,{align:'center'});
+        d.setTextColor(0);
+    }
+
     doc.autoTable({
-        startY:startY,
+        startY:sy,
         head:[PRES_HDR],body:rows,
         styles:{fontSize:6,cellPadding:1.2,lineColor:[0,0,0],lineWidth:0.1,textColor:[0,0,0]},
         headStyles:{fillColor:[16,185,129],textColor:[255,255,255]},
-        margin:{left:M,right:M,top:startY,bottom:10},
-        didDrawPage:function(data){
-            // Footer only — header is NOT repeated on subsequent pages
-            doc.setFontSize(5.5);doc.setFont(undefined,'normal');doc.setTextColor(100);
-            doc.text('SMAPRDC — Présences Personnel',M+2,pageH-4);
-            doc.text('Page '+data.pageNumber,pageW-M-2,pageH-4,{align:'right'});
-            doc.setTextColor(0);
-            // Set top margin for subsequent pages (no header)
-            if (data.pageNumber === 1) data.settings.margin.top = 10;
+        margin:{left:M,right:M,top:sy,bottom:16},
+        didDrawPage:function(d){
+            drawFoot(doc,d.pageNumber);
+            if(d.pageNumber===1)d.settings.margin.top=10;
         }
     });
+
+    // Synthesis section
+    let fy=doc.lastAutoTable.finalY||(pageH-40);
+    const needNew=fy+35>pageH-16;
+    if(needNew){doc.addPage();fy=15;}else{fy+=8;}
+    const sX=pageW/2;
+    doc.setFontSize(8);doc.setFont(undefined,'normal');doc.setTextColor(0);
+    doc.text('Nombre Total d\'Agents :',sX-2,fy,{align:'right'});
+    doc.setFont(undefined,'bold');doc.text('  '+totalAgents,sX-2,fy);fy+=6;
+    doc.setFont(undefined,'normal');
+    doc.text('Nombre d\'Agents présents :',sX-2,fy,{align:'right'});
+    doc.setFont(undefined,'bold');
+    const pp=totalAgents?((totalPresents/(nbDays>1?totalAgents*nbDays:totalAgents))*100).toFixed(2):'0.00';
+    doc.text('  '+totalPresents+', soit '+pp+' %',sX-2,fy);fy+=6;
+    doc.setFont(undefined,'normal');
+    doc.text('Nombre d\'Agents Arrivés en Retard :',sX-2,fy,{align:'right'});
+    doc.setFont(undefined,'bold');
+    const rp=totalPresents?((totalRetard/totalPresents)*100).toFixed(2):'0.00';
+    doc.text('  '+totalRetard+' sur '+totalPresents+', soit '+rp+' %',sX-2,fy);
+    if(needNew)drawFoot(doc,doc.internal.getNumberOfPages());
+
     doc.save('Presences_'+label.replace(/[^a-zA-Z0-9]/g,'_')+'.pdf');
 }
 function exportCarrPresXls(mois,wi,di){
@@ -619,7 +676,7 @@ async function loadCarrMonth(mois){
         const sortedWeeks=Object.entries(weeks).sort((a,b)=>a[0].localeCompare(b[0]));
 
         // Store for exports
-        _carrPresData[mois]={days,weeks:sortedWeeks.map(([k,w])=>w)};
+        _carrPresData[mois]={days,weeks:sortedWeeks.map(([k,w])=>w),seuil_absence:raw.seuil_absence||'',total_expected:raw.total_expected||0};
 
         let html='';
         sortedWeeks.forEach(([wKey,w],wi)=>{

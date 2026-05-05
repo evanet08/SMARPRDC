@@ -511,13 +511,34 @@ def presence_personnel_detail(request):
         absent_count = sum(1 for a in day_list if not a['present'] and not a.get('non_disponible'))
         indisponible_count = sum(1 for a in day_list if a.get('non_disponible'))
         jst = sum(1 for a in day_list if not a['present'] and not a.get('non_disponible') and a.get('justifie'))
+        # Count retard agents for this day
+        retard_count = sum(1 for a in day_list if a['present'] and a.get('retard_s', 0) > 0)
         result.append({'jour': jour, 'presents': p, 'absents': absent_count,
                        'justifies': jst, 'indisponibles': indisponible_count,
-                       'attendus': day_expected,
+                       'attendus': day_expected, 'retard_count': retard_count,
                        'taux': round((p / day_expected) * 100, 1) if day_expected else 0,
                        'agents': day_list})
 
-    return Response({'total_expected': len(all_personnel), 'days': result})
+    # Compute representative heureD and seuil from most common coupon
+    hd_repr = '8h00'
+    if coupon_map:
+        # Use the most frequently referenced heureD
+        from collections import Counter
+        hd_counter = Counter(fmt_t(v) for v in coupon_map.values() if v)
+        if hd_counter:
+            hd_repr = hd_counter.most_common(1)[0][0]
+    # Compute seuil = heureD + tolerance
+    hd_s_repr = parse_t(hd_repr)
+    seuil_s = hd_s_repr + tolerance_h * 3600
+    seuil_str = f"{int(seuil_s // 3600)}h{int((seuil_s % 3600) // 60):02d}"
+
+    return Response({
+        'total_expected': len(all_personnel),
+        'tolerance_h': tolerance_h,
+        'heureD': hd_repr,
+        'seuil_absence': seuil_str,
+        'days': result
+    })
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
