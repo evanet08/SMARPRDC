@@ -533,3 +533,22 @@ body {
 @media (max-width: 480px) {
     .stats-hero { grid-template-columns: 1fr; }
 }
+
+/* ── Liste Déclarative Table ─────────────────────────────────────────── */
+#table-declarative {
+    min-width: 1400px;
+}
+#table-declarative th {
+    font-size: .64rem;
+    padding: 8px 6px;
+    white-space: nowrap;
+}
+#table-declarative td {
+    padding: 8px 6px;
+    font-size: .74rem;
+}
+#tab-liste-declarative .table-scroll {
+    max-height: none;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}

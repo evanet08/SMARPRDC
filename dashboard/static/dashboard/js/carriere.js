@@ -714,5 +714,227 @@ async function saveJustification(idP,dateAbs){
     }catch(e){console.error('[Carrière] Justification save:',e);}
 }
 
+// ═══ TAB 5: LISTE DÉCLARATIVE ═══════════════════════════════════════════════
+let _listeDeclarative = [];
+let _listeDeclarativeLoaded = false;
+
+function _calcAge(dateStr) {
+    if (!dateStr || dateStr === '—') return '—';
+    try {
+        const parts = dateStr.includes('/') ? dateStr.split('/').reverse() : dateStr.split('-');
+        const y = parseInt(parts[0]), m = parseInt(parts[1]) - 1, d = parseInt(parts[2]);
+        if (isNaN(y) || isNaN(m) || isNaN(d)) return '—';
+        const born = new Date(y, m, d);
+        const today = new Date();
+        let age = today.getFullYear() - born.getFullYear();
+        if (today.getMonth() < born.getMonth() || (today.getMonth() === born.getMonth() && today.getDate() < born.getDate())) age--;
+        return age > 0 ? age + ' ans' : '—';
+    } catch (e) { return '—'; }
+}
+
+function _calcAnciennete(dateStr) {
+    if (!dateStr || dateStr === '—') return '—';
+    try {
+        const parts = dateStr.includes('/') ? dateStr.split('/').reverse() : dateStr.split('-');
+        const y = parseInt(parts[0]), m = parseInt(parts[1]) - 1, d = parseInt(parts[2]);
+        if (isNaN(y) || isNaN(m) || isNaN(d)) return '—';
+        const start = new Date(y, m, d);
+        const today = new Date();
+        let years = today.getFullYear() - start.getFullYear();
+        let months = today.getMonth() - start.getMonth();
+        if (today.getDate() < start.getDate()) months--;
+        if (months < 0) { years--; months += 12; }
+        if (years <= 0 && months <= 0) return '—';
+        return years > 0 ? years + ' an' + (years > 1 ? 's' : '') + (months > 0 ? ' ' + months + ' m' : '') : months + ' mois';
+    } catch (e) { return '—'; }
+}
+
+async function loadListeDeclarative() {
+    if (_listeDeclarativeLoaded) return;
+    _listeDeclarativeLoaded = true;
+    try {
+        const res = await fetch(API + '/liste-declarative');
+        _listeDeclarative = await res.json();
+        renderDeclarative();
+    } catch (e) {
+        console.error('[Carrière] Liste Déclarative:', e);
+        document.getElementById('tbody-declarative').innerHTML = '<tr><td colspan="16" class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Erreur de chargement</div></td></tr>';
+    }
+}
+
+function renderDeclarative() {
+    let html = '';
+    _listeDeclarative.forEach((p, i) => {
+        const age = _calcAge(p.date_naissance);
+        const anc = _calcAnciennete(p.date_engagement);
+        html += `<tr data-name="${(p.nom_complet || '').toLowerCase()}">
+            <td style="font-weight:600;color:var(--text-muted);font-size:.72rem">${i + 1}</td>
+            <td style="font-size:.76rem">${D(p.matricule)}</td>
+            <td style="font-weight:600;white-space:nowrap">${D(p.nom_complet)}</td>
+            <td>${D(p.genre)}</td>
+            <td style="font-size:.72rem">${D(p.date_naissance)}</td>
+            <td style="font-size:.76rem">${D(p.province_origine)}</td>
+            <td style="font-size:.76rem;font-weight:600">${D(p.niveau_etudes)}</td>
+            <td style="font-size:.72rem">${D(p.domaine_etudes)}</td>
+            <td style="font-size:.76rem">${D(p.matriculeFP)}</td>
+            <td style="font-size:.72rem">${D(p.date_engagement)}</td>
+            <td style="font-size:.76rem;font-weight:600">${D(p.grade_stat)}</td>
+            <td style="font-size:.72rem">${D(p.ref_acte_engagement)}</td>
+            <td style="font-size:.76rem">${D(p.fonction)}</td>
+            <td style="font-size:.72rem">${D(p.acte_nomination)}</td>
+            <td style="font-weight:600;color:var(--accent-indigo)">${age}</td>
+            <td style="font-weight:600;color:var(--accent-emerald)">${anc}</td>
+        </tr>`;
+    });
+    document.getElementById('tbody-declarative').innerHTML = html;
+    document.getElementById('count-declarative').textContent = _listeDeclarative.length + ' agents';
+}
+
+function filterDeclarative() {
+    const q = document.getElementById('search-declarative').value.toLowerCase();
+    let vis = 0;
+    document.querySelectorAll('#tbody-declarative tr').forEach(r => {
+        const ok = !q || (r.dataset.name && r.dataset.name.includes(q));
+        r.style.display = ok ? '' : 'none';
+        if (ok) vis++;
+    });
+    document.getElementById('count-declarative').textContent = vis + ' agents';
+}
+
+// ═══ LISTE DÉCLARATIVE EXPORTS ═══════════════════════════════════════════════
+
+const _DECL_HDR = ['#', 'Matricule', 'Nom & Post Nom', 'Sexe', 'Date de naissance',
+    "Province d'origine", "Niveau d'études", "Domaine d'études",
+    'Matricule FP', 'Date adm. sous statut', 'Grade Stat',
+    'Réf. Acte juridique', 'Fonction', 'Acte de nomination', 'Âge', 'Ancienneté'];
+
+function _declRows() {
+    return _listeDeclarative.map((p, i) => [
+        i + 1, D(p.matricule), D(p.nom_complet), D(p.genre), D(p.date_naissance),
+        D(p.province_origine), D(p.niveau_etudes), D(p.domaine_etudes),
+        D(p.matriculeFP), D(p.date_engagement), D(p.grade_stat),
+        D(p.ref_acte_engagement), D(p.fonction), D(p.acte_nomination),
+        _calcAge(p.date_naissance), _calcAnciennete(p.date_engagement)
+    ]);
+}
+
+// ── Institutional header text lines (centered) ──
+const _DECL_HEADER_LINES = [
+    'REPUBLIQUE DEMOCRATIQUE DU CONGO',
+    'MINISTERE DES FINANCES',
+    'SECRETARIAT GENERAL AUX FINANCES',
+    '',
+    'ECOLE NATIONALE DES FINANCES',
+    'DIRECTION DES RESSOURCES',
+    'LE DIRECTEUR',
+    '',
+    'LISTE DECLARATIVE ACTUALISEE'
+];
+
+async function _getDeclLogos() {
+    // Reuse the institution cache from exports_pro.js if available
+    const inst = (typeof _getInstitution === 'function') ? await _getInstitution() : {};
+    const logoRDC = (typeof _loadImageAsBase64 === 'function') ? await _loadImageAsBase64(inst.logo_pays_url || '/static/dashboard/img/logoRDC.jpg') : null;
+    return { rdc: logoRDC, inst };
+}
+
+function _drawDeclHeader(doc, logos, pageW) {
+    const cX = pageW / 2;
+    // Logo RDC centered
+    if (logos.rdc) {
+        try { doc.addImage(logos.rdc, 'JPEG', cX - 10, 3, 20, 20); } catch(e) {}
+    }
+    let y = 25;
+    doc.setFontSize(9); doc.setFont(undefined, 'bold');
+    doc.text('REPUBLIQUE DEMOCRATIQUE DU CONGO', cX, y, { align: 'center' }); y += 4.5;
+    doc.setFontSize(8);
+    doc.text('MINISTERE DES FINANCES', cX, y, { align: 'center' }); y += 4;
+    doc.text('SECRETARIAT GENERAL AUX FINANCES', cX, y, { align: 'center' }); y += 6;
+    doc.setFontSize(8.5); doc.setFont(undefined, 'bold');
+    doc.text('ECOLE NATIONALE DES FINANCES', cX, y, { align: 'center' }); y += 4;
+    doc.text('DIRECTION DES RESSOURCES', cX, y, { align: 'center' }); y += 4;
+    doc.setFont(undefined, 'normal');
+    doc.text('LE DIRECTEUR', cX, y, { align: 'center' }); y += 6;
+    doc.setDrawColor(0); doc.setLineWidth(0.4);
+    doc.line(10, y, pageW - 10, y); y += 5;
+    doc.setFontSize(10); doc.setFont(undefined, 'bold');
+    doc.text('LISTE DECLARATIVE ACTUALISEE', cX, y, { align: 'center' }); y += 4;
+    doc.setFontSize(7); doc.setFont(undefined, 'normal');
+    doc.text('Générée le ' + new Date().toLocaleDateString('fr-FR'), cX, y, { align: 'center' });
+    return y + 4;
+}
+
+async function exportDeclarativePDF() {
+    if (!_listeDeclarative.length) { toast('⚠️ Aucune donnée', 'error'); return; }
+    const logos = await _getDeclLogos();
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('l', 'mm', 'a4');
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const startY = _drawDeclHeader(doc, logos, pageW);
+
+    const rows = _declRows();
+    doc.autoTable({
+        startY: startY,
+        head: [_DECL_HDR],
+        body: rows,
+        theme: 'grid',
+        styles: { fontSize: 5.5, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0], overflow: 'linebreak', valign: 'middle' },
+        headStyles: { fillColor: [99, 102, 241], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 5, halign: 'center' },
+        columnStyles: {
+            0: { cellWidth: 6, halign: 'center' },
+            1: { cellWidth: 14 },
+            2: { cellWidth: 32 },
+            3: { cellWidth: 8, halign: 'center' },
+            4: { cellWidth: 16 },
+            5: { cellWidth: 18 },
+            6: { cellWidth: 12, halign: 'center' },
+            7: { cellWidth: 24 },
+            8: { cellWidth: 14 },
+            9: { cellWidth: 16 },
+            10: { cellWidth: 10, halign: 'center' },
+            11: { cellWidth: 18 },
+            12: { cellWidth: 22 },
+            13: { cellWidth: 20 },
+            14: { cellWidth: 12, halign: 'center' },
+            15: { cellWidth: 16, halign: 'center' }
+        },
+        margin: { left: 5, right: 5, top: startY, bottom: 12 },
+        didDrawPage: function (data) {
+            if (data.pageNumber > 1) {
+                _drawDeclHeader(doc, logos, pageW);
+            }
+            // Footer
+            doc.setFontSize(5.5); doc.setFont(undefined, 'normal'); doc.setTextColor(100);
+            doc.text('SMAPRDC — Liste Déclarative', 8, pageH - 4);
+            doc.text('Page ' + data.pageNumber, pageW - 8, pageH - 4, { align: 'right' });
+            doc.setTextColor(0);
+        }
+    });
+    doc.save('SMAPRDC_Liste_Declarative_' + new Date().toISOString().slice(0, 10) + '.pdf');
+}
+
+function exportDeclarativeExcel() {
+    if (!_listeDeclarative.length) { toast('⚠️ Aucune donnée', 'error'); return; }
+    const rows = [];
+    // Institutional header
+    _DECL_HEADER_LINES.forEach(line => rows.push([line]));
+    rows.push([]);
+    rows.push(['Générée le ' + new Date().toLocaleDateString('fr-FR')]);
+    rows.push([]);
+    rows.push(_DECL_HDR);
+    _declRows().forEach(r => rows.push(r));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [
+        { wch: 5 }, { wch: 12 }, { wch: 35 }, { wch: 6 }, { wch: 14 },
+        { wch: 18 }, { wch: 10 }, { wch: 28 }, { wch: 14 }, { wch: 16 },
+        { wch: 10 }, { wch: 20 }, { wch: 22 }, { wch: 22 }, { wch: 10 }, { wch: 14 }
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, 'Liste Déclarative');
+    XLSX.writeFile(wb, 'SMAPRDC_Liste_Declarative_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+}
+
 // ═══ INIT ════════════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', loadAll);

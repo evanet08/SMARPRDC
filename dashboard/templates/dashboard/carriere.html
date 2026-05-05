@@ -84,6 +84,9 @@
                 <button class="tab-btn" data-tab="tab-stats" onclick="switchTab('tab-stats', this);loadCarriereStats()" id="btn-tab-stats">
                     <span>📊</span> Statistiques
                 </button>
+                <button class="tab-btn" data-tab="tab-liste-declarative" onclick="switchTab('tab-liste-declarative', this);loadListeDeclarative()" id="btn-tab-liste-declarative">
+                    <span>📜</span> Liste Déclarative
+                </button>
             </div>
 
             <!-- ═══ TAB 1: VUE GLOBALE ═══ -->
@@ -238,6 +241,48 @@
                     </div>
                     <div style="padding:16px" id="carr-cumuls-wrap">
                         <div class="chart-loading"><div class="spinner"></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ TAB 5: LISTE DÉCLARATIVE ═══ -->
+            <div class="tab-panel" id="tab-liste-declarative">
+                <div class="search-bar">
+                    <input type="text" class="search-input" id="search-declarative" placeholder="🔍 Rechercher un agent…" oninput="filterDeclarative()">
+                    <button class="btn btn-primary" onclick="exportDeclarativePDF()" id="btn-export-declarative-pdf">📄 Export PDF</button>
+                    <button class="btn btn-success" onclick="exportDeclarativeExcel()" id="btn-export-declarative-xls">📗 Export Excel</button>
+                </div>
+                <div class="table-card">
+                    <div class="table-card-header">
+                        <div class="table-card-title">
+                            <span>📜</span> Liste Déclarative Actualisée
+                        </div>
+                        <span class="table-card-count" id="count-declarative">—</span>
+                    </div>
+                    <div class="table-scroll" style="max-height:none;overflow-x:auto">
+                        <table class="data-table" id="table-declarative">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Matricule</th>
+                                    <th>Nom &amp; Post Nom</th>
+                                    <th>Sexe</th>
+                                    <th>Date de naissance</th>
+                                    <th>Province d'origine</th>
+                                    <th>Niveau d'études</th>
+                                    <th>Domaine d'études</th>
+                                    <th>Matricule FP</th>
+                                    <th>Date adm. sous statut</th>
+                                    <th>Grade Stat</th>
+                                    <th>Réf. Acte juridique</th>
+                                    <th>Fonction</th>
+                                    <th>Acte de nomination</th>
+                                    <th>Âge</th>
+                                    <th>Ancienneté</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-declarative"></tbody>
+                        </table>
                     </div>
                 </div>
             </div>

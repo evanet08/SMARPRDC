@@ -595,6 +595,35 @@ def carriere_conges(request):
     return Response(_run_stats_query(sql))
 
 
+@api_view(['GET'])
+def carriere_liste_declarative(request):
+    """Return data for the Liste Déclarative: all administrative personnel in service
+    with extended fields (grade, specialite, grade_administratif, naissance, etc.)."""
+    sql = """
+        SELECT p.id_personnel,
+               p.matricule,
+               CONCAT(IFNULL(p.nom,''),' ',IFNULL(p.postnom,''),' ',IFNULL(p.prenom,'')) AS nom_complet,
+               p.genre,
+               p.date_naissance,
+               p.province_origine,
+               IFNULL(gr.sigle,'—') AS niveau_etudes,
+               IFNULL(sp.specialite,'—') AS domaine_etudes,
+               p.matriculeFP,
+               p.date_engagement,
+               IFNULL(ga.code,'—') AS grade_stat,
+               p.fonction,
+               p.acte_nomination,
+               p.ref_acte_engagement
+        FROM personnel p
+        LEFT JOIN personnel_grade gr ON gr.id_grade = p.id_grade
+        LEFT JOIN personnel_specialite sp ON sp.id_specialite = p.id_specialite
+        LEFT JOIN personnel_grade_administratif ga ON ga.id_grade_administratif = p.id_grade_administratif
+        WHERE p.isAdministratif = 1 AND p.en_fonction = 1 AND p.id_personnel != 1
+        ORDER BY p.nom, p.postnom
+    """
+    return Response(_run_stats_query(sql))
+
+
 @api_view(['POST'])
 def carriere_etats_save(request):
     """Upsert professional state for a personnel."""
