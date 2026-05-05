@@ -834,35 +834,48 @@ const _DECL_HEADER_LINES = [
 async function _getDeclLogos() {
     // Reuse the institution cache from exports_pro.js if available
     const inst = (typeof _getInstitution === 'function') ? await _getInstitution() : {};
-    const logoRDC = (typeof _loadImageAsBase64 === 'function') ? await _loadImageAsBase64(inst.logo_pays_url || '/static/dashboard/img/logoRDC.jpg') : null;
-    return { rdc: logoRDC, inst };
+    const logoMinFin = (typeof _loadImageAsBase64 === 'function') ? await _loadImageAsBase64(inst.logo_ministere_url || '/static/dashboard/img/logoMinFin.png') : null;
+    return { logo: logoMinFin, inst };
 }
 
 function _drawDeclHeader(doc, logos, pageW) {
     const cX = pageW / 2;
-    // Logo RDC centered
-    if (logos.rdc) {
-        try { doc.addImage(logos.rdc, 'JPEG', cX - 10, 3, 20, 20); } catch(e) {}
-    }
-    let y = 25;
+    const M = 3; // same tiny margin as table
+
+    // ── Top text block: REPUBLIQUE / MINISTERE / SECRETARIAT ──
+    let y = 6;
     doc.setFontSize(9); doc.setFont(undefined, 'bold');
     doc.text('REPUBLIQUE DEMOCRATIQUE DU CONGO', cX, y, { align: 'center' }); y += 4.5;
     doc.setFontSize(8);
     doc.text('MINISTERE DES FINANCES', cX, y, { align: 'center' }); y += 4;
-    doc.text('SECRETARIAT GENERAL AUX FINANCES', cX, y, { align: 'center' }); y += 6;
+    doc.text('SECRETARIAT GENERAL AUX FINANCES', cX, y, { align: 'center' }); y += 3;
+
+    // ── Logo MinFin centered after SECRETARIAT GENERAL ──
+    const logoH = 16, logoW = 16;
+    if (logos.logo) {
+        try { doc.addImage(logos.logo, 'PNG', cX - logoW / 2, y, logoW, logoH); } catch(e) {}
+    }
+    y += logoH + 2;
+
+    // ── Bottom text block: ECOLE / DIRECTION / LE DIRECTEUR ──
     doc.setFontSize(8.5); doc.setFont(undefined, 'bold');
     doc.text('ECOLE NATIONALE DES FINANCES', cX, y, { align: 'center' }); y += 4;
     doc.text('DIRECTION DES RESSOURCES', cX, y, { align: 'center' }); y += 4;
     doc.setFont(undefined, 'normal');
-    doc.text('LE DIRECTEUR', cX, y, { align: 'center' }); y += 6;
+    doc.text('LE DIRECTEUR', cX, y, { align: 'center' }); y += 5;
+
+    // ── Separator line ──
     doc.setDrawColor(0); doc.setLineWidth(0.4);
-    doc.line(10, y, pageW - 10, y); y += 5;
+    doc.line(M, y, pageW - M, y); y += 5;
+
+    // ── Title ──
     doc.setFontSize(10); doc.setFont(undefined, 'bold');
-    doc.text('LISTE DECLARATIVE ACTUALISEE', cX, y, { align: 'center' }); y += 4;
-    doc.setFontSize(7); doc.setFont(undefined, 'normal');
-    doc.text('Générée le ' + new Date().toLocaleDateString('fr-FR'), cX, y, { align: 'center' });
-    return y + 4;
+    doc.text('LISTE DECLARATIVE ACTUALISEE', cX, y, { align: 'center' }); y += 5;
+
+    return y;
 }
+
+const _DECL_MARGIN = 3; // tiny margin for edge-to-edge layout
 
 async function exportDeclarativePDF() {
     if (!_listeDeclarative.length) { toast('⚠️ Aucune donnée', 'error'); return; }
@@ -872,6 +885,7 @@ async function exportDeclarativePDF() {
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
     const startY = _drawDeclHeader(doc, logos, pageW);
+    const usable = pageW - 2 * _DECL_MARGIN;
 
     const rows = _declRows();
     doc.autoTable({
@@ -879,35 +893,36 @@ async function exportDeclarativePDF() {
         head: [_DECL_HDR],
         body: rows,
         theme: 'grid',
+        tableWidth: usable,
         styles: { fontSize: 5.5, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0], overflow: 'linebreak', valign: 'middle' },
         headStyles: { fillColor: [99, 102, 241], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 5, halign: 'center' },
         columnStyles: {
-            0: { cellWidth: 6, halign: 'center' },
-            1: { cellWidth: 14 },
-            2: { cellWidth: 32 },
-            3: { cellWidth: 8, halign: 'center' },
-            4: { cellWidth: 16 },
-            5: { cellWidth: 18 },
-            6: { cellWidth: 12, halign: 'center' },
-            7: { cellWidth: 24 },
-            8: { cellWidth: 14 },
-            9: { cellWidth: 16 },
-            10: { cellWidth: 10, halign: 'center' },
-            11: { cellWidth: 18 },
-            12: { cellWidth: 22 },
-            13: { cellWidth: 20 },
-            14: { cellWidth: 12, halign: 'center' },
-            15: { cellWidth: 16, halign: 'center' }
+            0: { cellWidth: 'auto', halign: 'center' },
+            1: { cellWidth: 'auto' },
+            2: { cellWidth: 'auto' },
+            3: { cellWidth: 'auto', halign: 'center' },
+            4: { cellWidth: 'auto' },
+            5: { cellWidth: 'auto' },
+            6: { cellWidth: 'auto', halign: 'center' },
+            7: { cellWidth: 'auto' },
+            8: { cellWidth: 'auto' },
+            9: { cellWidth: 'auto' },
+            10: { cellWidth: 'auto', halign: 'center' },
+            11: { cellWidth: 'auto' },
+            12: { cellWidth: 'auto' },
+            13: { cellWidth: 'auto' },
+            14: { cellWidth: 'auto', halign: 'center' },
+            15: { cellWidth: 'auto', halign: 'center' }
         },
-        margin: { left: 5, right: 5, top: startY, bottom: 12 },
+        margin: { left: _DECL_MARGIN, right: _DECL_MARGIN, top: startY, bottom: 10 },
         didDrawPage: function (data) {
             if (data.pageNumber > 1) {
                 _drawDeclHeader(doc, logos, pageW);
             }
             // Footer
             doc.setFontSize(5.5); doc.setFont(undefined, 'normal'); doc.setTextColor(100);
-            doc.text('SMAPRDC — Liste Déclarative', 8, pageH - 4);
-            doc.text('Page ' + data.pageNumber, pageW - 8, pageH - 4, { align: 'right' });
+            doc.text('SMAPRDC — Liste Déclarative', _DECL_MARGIN + 2, pageH - 4);
+            doc.text('Page ' + data.pageNumber, pageW - _DECL_MARGIN - 2, pageH - 4, { align: 'right' });
             doc.setTextColor(0);
         }
     });
