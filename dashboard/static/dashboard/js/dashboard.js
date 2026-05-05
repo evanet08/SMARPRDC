@@ -808,19 +808,26 @@ async function exportPersPDF(mois, wi, di) {
 
     // ── Footer helper ──
     function drawFooter(d, pgNum) {
-        const footY = pageH - 10;
+        const footY = pageH - 12;
+        const cX = pageW / 2;
         // Border-top line
-        d.setDrawColor(0); d.setLineWidth(0.4);
-        d.line(M, footY - 1, pageW - M, footY - 1);
-        // Left column: SMAPRDC/LMDSoft
-        d.setFontSize(6.5); d.setFont(undefined, 'bold'); d.setTextColor(40);
-        d.text('Présence des agents gérées conjointement par SMAPRDC et LMDSoft conçues et propulsées par NEXORA TECH', M + 1, footY + 2);
-        // Right column: Contact
-        d.setFontSize(6); d.setFont(undefined, 'bold'); d.setTextColor(60);
-        d.text('✉ info@enf-rdc.cd  |  ☎ (+243)994034954  |  🌐 enf-rdc.cd', pageW - M - 1, footY + 2, { align: 'right' });
-        // Page number centered below
-        d.setFontSize(6); d.setFont(undefined, 'bold'); d.setTextColor(100);
-        d.text('Page ' + pgNum, pageW / 2, footY + 6, { align: 'center' });
+        d.setDrawColor(0); d.setLineWidth(0.5);
+        d.line(M, footY - 2, pageW - M, footY - 2);
+        // Left column: right-aligned to center
+        d.setFontSize(7); d.setFont(undefined, 'bold'); d.setTextColor(30);
+        d.text('Présence des agents gérées conjointement par', cX - 2, footY + 1, { align: 'right' });
+        d.text('SMAPRDC et LMDSoft conçues et propulsées par NEXORA TECH', cX - 2, footY + 5, { align: 'right' });
+        // Right column: left-aligned from center
+        d.setFontSize(7); d.setFont(undefined, 'bold');
+        d.setTextColor(37, 99, 235); // blue
+        d.text('✉ info@enf-rdc.cd', cX + 2, footY + 1);
+        d.setTextColor(16, 185, 129); // green
+        d.text('☎ (+243) 994 034 954', cX + 2, footY + 5);
+        d.setTextColor(99, 102, 241); // indigo
+        d.text('🌐 enf-rdc.cd', cX + 45, footY + 5);
+        // Page number
+        d.setFontSize(6.5); d.setFont(undefined, 'bold'); d.setTextColor(80);
+        d.text('— Page ' + pgNum + ' —', cX, footY + 9, { align: 'center' });
         d.setTextColor(0);
     }
 
@@ -830,7 +837,7 @@ async function exportPersPDF(mois, wi, di) {
         body: rows,
         styles: { fontSize: 6, cellPadding: 1.2, lineColor: [0,0,0], lineWidth: 0.1, textColor: [0,0,0] },
         headStyles: { fillColor: [16,185,129], textColor: [255,255,255] },
-        margin: { left: M, right: M, top: sy, bottom: 20 },
+        margin: { left: M, right: M, top: sy, bottom: 22 },
         didDrawPage: function(d) {
             drawFooter(doc, d.pageNumber);
             // Set top margin for subsequent pages (no header)
