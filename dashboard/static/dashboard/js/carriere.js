@@ -608,23 +608,15 @@ async function exportCarrPresPDF(mois,wi,di){
 
     // Footer helper
     function drawFoot(d,pgNum){
-        const footY=pageH-8;
-        const cX=pageW/2;
+        const footY=pageH-6;
         d.setDrawColor(0);d.setLineWidth(0.5);
-        d.line(M,footY-2,pageW-M,footY-2);
-        d.setFontSize(7);d.setFont(undefined,'bold');d.setTextColor(30);
-        d.text('Générées conjointement par SMAPRDC et LMDSoft, propulsées par NEXORA TECH',cX-3,footY+1,{align:'right'});
-        d.setFontSize(7);d.setFont(undefined,'bold');
-        d.setTextColor(37,99,235);
-        d.text('✉ info@enf-rdc.cd',cX+3,footY+1);
-        const emailW=d.getTextWidth('✉ info@enf-rdc.cd');
-        d.setTextColor(16,185,129);
-        d.text('☎ (+243) 994 034 954',cX+3+emailW+4,footY+1);
-        const phoneW=d.getTextWidth('☎ (+243) 994 034 954');
-        d.setTextColor(99,102,241);
-        d.text('🌐 enf-rdc.cd',cX+3+emailW+4+phoneW+4,footY+1);
-        d.setFontSize(6);d.setFont(undefined,'bold');d.setTextColor(80);
-        d.text('— Page '+pgNum+' —',cX,footY+5,{align:'center'});
+        d.line(M,footY-3,pageW-M,footY-3);
+        d.setFontSize(6.5);d.setFont(undefined,'bold');d.setTextColor(30);
+        d.text('Générées conjointement par SMAPRDC et LMDSoft, propulsées par NEXORA TECH',M,footY);
+        d.setFontSize(6.5);d.setFont(undefined,'bold');d.setTextColor(80);
+        d.text('Page '+pgNum,pageW/2,footY,{align:'center'});
+        d.setFontSize(6.5);d.setFont(undefined,'bold');d.setTextColor(37,99,235);
+        d.text('info@enf-rdc.cd  |  (+243) 994 034 954  |  enf-rdc.cd',pageW-M,footY,{align:'right'});
         d.setTextColor(0);
     }
 

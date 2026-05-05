@@ -808,27 +808,20 @@ async function exportPersPDF(mois, wi, di) {
 
     // ── Footer helper ──
     function drawFooter(d, pgNum) {
-        const footY = pageH - 8;
-        const cX = pageW / 2;
+        const footY = pageH - 6;
         // Border-top line
         d.setDrawColor(0); d.setLineWidth(0.5);
-        d.line(M, footY - 2, pageW - M, footY - 2);
-        // Left: right-aligned to center
-        d.setFontSize(7); d.setFont(undefined, 'bold'); d.setTextColor(30);
-        d.text('Générées conjointement par SMAPRDC et LMDSoft, propulsées par NEXORA TECH', cX - 3, footY + 1, { align: 'right' });
-        // Right: left-aligned from center
-        d.setFontSize(7); d.setFont(undefined, 'bold');
-        d.setTextColor(37, 99, 235);
-        d.text('✉ info@enf-rdc.cd', cX + 3, footY + 1);
-        const emailW = d.getTextWidth('✉ info@enf-rdc.cd');
-        d.setTextColor(16, 185, 129);
-        d.text('☎ (+243) 994 034 954', cX + 3 + emailW + 4, footY + 1);
-        const phoneW = d.getTextWidth('☎ (+243) 994 034 954');
-        d.setTextColor(99, 102, 241);
-        d.text('🌐 enf-rdc.cd', cX + 3 + emailW + 4 + phoneW + 4, footY + 1);
-        // Page number
-        d.setFontSize(6); d.setFont(undefined, 'bold'); d.setTextColor(80);
-        d.text('— Page ' + pgNum + ' —', cX, footY + 5, { align: 'center' });
+        d.line(M, footY - 3, pageW - M, footY - 3);
+        // Left: institution text
+        d.setFontSize(6.5); d.setFont(undefined, 'bold'); d.setTextColor(30);
+        d.text('Générées conjointement par SMAPRDC et LMDSoft, propulsées par NEXORA TECH', M, footY);
+        // Center: page number
+        d.setFontSize(6.5); d.setFont(undefined, 'bold'); d.setTextColor(80);
+        d.text('Page ' + pgNum, pageW / 2, footY, { align: 'center' });
+        // Right: contact info
+        d.setFontSize(6.5); d.setFont(undefined, 'bold'); d.setTextColor(37, 99, 235);
+        const rightText = 'info@enf-rdc.cd  |  (+243) 994 034 954  |  enf-rdc.cd';
+        d.text(rightText, pageW - M, footY, { align: 'right' });
         d.setTextColor(0);
     }
 
