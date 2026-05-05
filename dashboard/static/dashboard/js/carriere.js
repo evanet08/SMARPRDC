@@ -728,7 +728,7 @@ function _calcAge(dateStr) {
         const today = new Date();
         let age = today.getFullYear() - born.getFullYear();
         if (today.getMonth() < born.getMonth() || (today.getMonth() === born.getMonth() && today.getDate() < born.getDate())) age--;
-        return age > 0 ? age + ' ans' : '—';
+        return age > 0 ? '' + age : '—';
     } catch (e) { return '—'; }
 }
 
