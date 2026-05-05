@@ -466,22 +466,58 @@ function _presRows(days){
     return rows;
 }
 
-function _carrPdfDoc(title){
-    const {jsPDF}=window.jspdf,doc=new jsPDF('l','mm','a4');
-    doc.setFontSize(14);doc.text('SMAPRDC — '+title,14,15);
-    doc.setFontSize(8);doc.text('Généré le '+new Date().toLocaleDateString('fr-FR'),14,21);
-    return doc;
+async function _carrPdfDocInst(title){
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF('l','mm','a4');
+    const pageW=doc.internal.pageSize.getWidth();
+    const pageH=doc.internal.pageSize.getHeight();
+    const inst=(typeof _getInstitution==='function')?await _getInstitution():{};
+    const logo=(typeof _loadImageAsBase64==='function')?await _loadImageAsBase64(inst.logo_ministere_url||'/static/dashboard/img/logoMinFin.png'):null;
+    const M=3;
+    function drawHeader(d){
+        const cX=pageW/2;let y=6;
+        d.setFontSize(9);d.setFont(undefined,'bold');
+        d.text('REPUBLIQUE DEMOCRATIQUE DU CONGO',cX,y,{align:'center'});y+=4.5;
+        d.setFontSize(8);
+        d.text('MINISTERE DES FINANCES',cX,y,{align:'center'});y+=4;
+        d.text('SECRETARIAT GENERAL AUX FINANCES',cX,y,{align:'center'});y+=3;
+        if(logo){try{d.addImage(logo,'PNG',cX-8,y,16,16);}catch(e){}}
+        y+=18;
+        d.setFontSize(8.5);d.setFont(undefined,'bold');
+        d.text('ECOLE NATIONALE DES FINANCES',cX,y,{align:'center'});y+=4;
+        d.text('DIRECTION DES RESSOURCES',cX,y,{align:'center'});y+=4;
+        d.setDrawColor(0);d.setLineWidth(0.4);
+        d.line(M,y,pageW-M,y);y+=5;
+        d.setFontSize(9);d.setFont(undefined,'bold');
+        d.text(title.toUpperCase(),cX,y,{align:'center'});y+=5;
+        return y;
+    }
+    const startY=drawHeader(doc);
+    return {doc,startY,drawHeader,pageW,pageH,M};
 }
 
-function exportCarrPresPDF(mois,wi,di){
+async function exportCarrPresPDF(mois,wi,di){
     const data=_carrPresData[mois];if(!data)return;
     let days,label=mois;
     if(di!==undefined){days=[data.weeks[wi].days[di]];label=data.weeks[wi].days[di].jour;}
     else if(wi!==undefined){days=data.weeks[wi].days;label=data.weeks[wi].label;}
     else{days=data.days;const p=mois.split('-');label=MOIS_FR[parseInt(p[1])]+' '+p[0];}
     const rows=_presRows(days);if(!rows.length)return;
-    const doc=_carrPdfDoc('Présences Personnel — '+label);
-    doc.autoTable({startY:25,head:[PRES_HDR],body:rows,styles:{fontSize:6,cellPadding:1.2},headStyles:{fillColor:[16,185,129]}});
+    const {doc,startY,drawHeader,pageW,pageH,M}=await _carrPdfDocInst('Présences Personnel — '+label);
+    doc.autoTable({
+        startY:startY,
+        head:[PRES_HDR],body:rows,
+        styles:{fontSize:6,cellPadding:1.2,lineColor:[0,0,0],lineWidth:0.1,textColor:[0,0,0]},
+        headStyles:{fillColor:[16,185,129],textColor:[255,255,255]},
+        margin:{left:M,right:M,top:startY,bottom:10},
+        didDrawPage:function(data){
+            if(data.pageNumber>1)drawHeader(doc);
+            doc.setFontSize(5.5);doc.setFont(undefined,'normal');doc.setTextColor(100);
+            doc.text('SMAPRDC — Présences Personnel',M+2,pageH-4);
+            doc.text('Page '+data.pageNumber,pageW-M-2,pageH-4,{align:'right'});
+            doc.setTextColor(0);
+        }
+    });
     doc.save('Presences_'+label.replace(/[^a-zA-Z0-9]/g,'_')+'.pdf');
 }
 function exportCarrPresXls(mois,wi,di){
@@ -638,11 +674,13 @@ async function loadCarrMonth(mois){
 }
 
 // ═══ EXPORT CUMULS (STATS TAB) ═══════════════════════════════════════════════
-function exportCumulsCarrPDF(){
+async function exportCumulsCarrPDF(){
     const tbl=document.querySelector('#carr-cumuls-wrap table');
     if(!tbl)return;
-    const doc=_carrPdfDoc('Cumuls Heures Supplémentaires');
-    doc.autoTable({html:tbl,startY:25,styles:{fontSize:6,cellPadding:1.2},headStyles:{fillColor:[245,158,11]}});
+    const {doc,startY,drawHeader,pageW,pageH,M}=await _carrPdfDocInst('Cumuls Heures Supplémentaires');
+    doc.autoTable({html:tbl,startY:startY,styles:{fontSize:6,cellPadding:1.2,lineColor:[0,0,0],lineWidth:0.1,textColor:[0,0,0]},headStyles:{fillColor:[245,158,11]},margin:{left:M,right:M,top:startY,bottom:10},
+        didDrawPage:function(data){if(data.pageNumber>1)drawHeader(doc);doc.setFontSize(5.5);doc.setFont(undefined,'normal');doc.setTextColor(100);doc.text('SMAPRDC — Cumuls',M+2,pageH-4);doc.text('Page '+data.pageNumber,pageW-M-2,pageH-4,{align:'right'});doc.setTextColor(0);}
+    });
     doc.save('SMAPRDC_Cumuls_'+new Date().toISOString().slice(0,10)+'.pdf');
 }
 function exportCumulsCarrXls(){

@@ -692,6 +692,40 @@ function _pdfDoc(title) {
     return { doc, now };
 }
 
+// ── Institutional header for presence PDFs ──────────────────────────────
+async function _pdfDocInst(title) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('l', 'mm', 'a4');
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const inst = (typeof _getInstitution === 'function') ? await _getInstitution() : {};
+    const logo = (typeof _loadImageAsBase64 === 'function') ? await _loadImageAsBase64(inst.logo_ministere_url || '/static/dashboard/img/logoMinFin.png') : null;
+    const M = 3;
+
+    function drawHeader(d) {
+        const cX = pageW / 2;
+        let y = 6;
+        d.setFontSize(9); d.setFont(undefined, 'bold');
+        d.text('REPUBLIQUE DEMOCRATIQUE DU CONGO', cX, y, { align: 'center' }); y += 4.5;
+        d.setFontSize(8);
+        d.text('MINISTERE DES FINANCES', cX, y, { align: 'center' }); y += 4;
+        d.text('SECRETARIAT GENERAL AUX FINANCES', cX, y, { align: 'center' }); y += 3;
+        if (logo) { try { d.addImage(logo, 'PNG', cX - 8, y, 16, 16); } catch(e){} }
+        y += 18;
+        d.setFontSize(8.5); d.setFont(undefined, 'bold');
+        d.text('ECOLE NATIONALE DES FINANCES', cX, y, { align: 'center' }); y += 4;
+        d.text('DIRECTION DES RESSOURCES', cX, y, { align: 'center' }); y += 4;
+        d.setDrawColor(0); d.setLineWidth(0.4);
+        d.line(M, y, pageW - M, y); y += 5;
+        d.setFontSize(9); d.setFont(undefined, 'bold');
+        d.text(title.toUpperCase(), cX, y, { align: 'center' }); y += 5;
+        return y;
+    }
+
+    const startY = drawHeader(doc);
+    return { doc, startY, drawHeader, pageW, pageH, M };
+}
+
 // ── Apprenants contextual ───────────────────────────────────────────────
 function exportApprPDF(ci, coi, si) {
     const rows = _apprRows(ci, coi, si);
@@ -721,14 +755,28 @@ function exportApprXls(ci, coi, si) {
 }
 
 // ── Personnel contextual ────────────────────────────────────────────────
-function exportPersPDF(mois, wi, di) {
+async function exportPersPDF(mois, wi, di) {
     const rows = _persRows(mois, wi, di);
     if (!rows.length) return;
     let label = mois;
     if (di !== undefined) label = _persData[mois].weeks[wi].days[di].jour;
     else if (wi !== undefined) label = _persData[mois].weeks[wi].label;
-    const { doc } = _pdfDoc('Présences Personnel — ' + label);
-    doc.autoTable({ startY: 25, head: [['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','Justifié','Motif','H.Retard','H.Sup']], body: rows, styles: { fontSize: 6, cellPadding: 1.2 }, headStyles: { fillColor: [16,185,129] } });
+    const { doc, startY, drawHeader, pageW, pageH, M } = await _pdfDocInst('Présences Personnel — ' + label);
+    doc.autoTable({
+        startY: startY,
+        head: [['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','Justifié','Motif','H.Retard','H.Sup']],
+        body: rows,
+        styles: { fontSize: 6, cellPadding: 1.2, lineColor: [0,0,0], lineWidth: 0.1, textColor: [0,0,0] },
+        headStyles: { fillColor: [16,185,129], textColor: [255,255,255] },
+        margin: { left: M, right: M, top: startY, bottom: 10 },
+        didDrawPage: function(data) {
+            if (data.pageNumber > 1) drawHeader(doc);
+            doc.setFontSize(5.5); doc.setFont(undefined, 'normal'); doc.setTextColor(100);
+            doc.text('SMAPRDC — Présences Personnel', M + 2, pageH - 4);
+            doc.text('Page ' + data.pageNumber, pageW - M - 2, pageH - 4, { align: 'right' });
+            doc.setTextColor(0);
+        }
+    });
     doc.save('Personnel_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf');
 }
 function exportPersXls(mois, wi, di) {
@@ -745,11 +793,13 @@ function exportPersXls(mois, wi, di) {
 }
 
 // ── Cumuls export ───────────────────────────────────────────────────────
-function exportCumulsPDF() {
+async function exportCumulsPDF() {
     const tbl = document.querySelector('#pres-personnel-cumuls table');
     if (!tbl) return;
-    const { doc } = _pdfDoc('Cumuls Heures Supplémentaires');
-    doc.autoTable({ html: tbl, startY: 25, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [245,158,11] } });
+    const { doc, startY, drawHeader, pageW, pageH, M } = await _pdfDocInst('Cumuls Heures Supplémentaires');
+    doc.autoTable({ html: tbl, startY: startY, styles: { fontSize: 7, cellPadding: 1.5, lineColor: [0,0,0], lineWidth: 0.1, textColor: [0,0,0] }, headStyles: { fillColor: [245,158,11] }, margin: { left: M, right: M, top: startY, bottom: 10 },
+        didDrawPage: function(data) { if (data.pageNumber > 1) drawHeader(doc); doc.setFontSize(5.5); doc.setFont(undefined, 'normal'); doc.setTextColor(100); doc.text('SMAPRDC — Cumuls', M+2, pageH-4); doc.text('Page '+data.pageNumber, pageW-M-2, pageH-4, {align:'right'}); doc.setTextColor(0); }
+    });
     doc.save('Cumuls_Heures_Supp.pdf');
 }
 function exportCumulsXls() {
