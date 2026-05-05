@@ -454,14 +454,14 @@ function getWeekRange(dateStr){
 
 // Data store for exports
 var _carrPresData = {};
-const PRES_HDR = ['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','H.Supp'];
+const PRES_HDR = ['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','H.Retard','H.Supp'];
 
 function _presRows(days){
     const rows=[];
     days.forEach(day=>{day.agents.forEach(a=>{
         // Skip non-disponible personnel (congé, état non-EnFx)
         if(a.non_disponible) return;
-        rows.push([a.agent,a.matricule||'—',a.matriculeFP||'—',a.grade_code||'—',a.genre||'—',a.recrutement_date||'—',day.jour,a.arrivee||'—',a.depart||'—',a.present?'Oui':'Non',a.heures_sup||'']);
+        rows.push([a.agent,a.matricule||'—',a.matriculeFP||'—',a.grade_code||'—',a.genre||'—',a.recrutement_date||'—',day.jour,a.arrivee||'—',a.depart||'—',a.present?'Oui':'Non',a.heures_retard||'',a.heures_sup||'']);
     });});
     return rows;
 }
@@ -528,7 +528,7 @@ function exportCarrPresXls(mois,wi,di){
     else{days=data.days;const p=mois.split('-');label=MOIS_FR[parseInt(p[1])]+' '+p[0];}
     const rows=_presRows(days);if(!rows.length)return;
     const wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet([PRES_HDR,...rows]);
-    ws['!cols']=[{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:12}];
+    ws['!cols']=[{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:12},{wch:12}];
     XLSX.utils.book_append_sheet(wb,ws,'Présences');
     XLSX.writeFile(wb,'Presences_'+label.replace(/[^a-zA-Z0-9]/g,'_')+'.xlsx');
 }
@@ -568,19 +568,20 @@ async function loadCarrierePresence(){
         let tExp=0,tPres=0,tDays=0;
         allData.forEach(raw=>{raw.days.forEach(day=>{tDays++;tPres+=day.presents;tExp+=day.attendus;
             day.agents.forEach(a=>{
-                if(!agentMap[a.agent])agentMap[a.agent]={present:0,absent:0,expected:0,overtime_s:0,indisponible:0,matricule:a.matricule,matriculeFP:a.matriculeFP,grade_code:a.grade_code,genre:a.genre,recrutement_date:a.recrutement_date};
+                if(!agentMap[a.agent])agentMap[a.agent]={present:0,absent:0,expected:0,overtime_s:0,retard_s:0,indisponible:0,matricule:a.matricule,matriculeFP:a.matriculeFP,grade_code:a.grade_code,genre:a.genre,recrutement_date:a.recrutement_date};
                 // Skip non-disponible personnel from presence/absence counts
                 if(a.non_disponible){agentMap[a.agent].indisponible++;return;}
                 agentMap[a.agent].expected+=1;if(a.present)agentMap[a.agent].present++;else agentMap[a.agent].absent++;
+                agentMap[a.agent].retard_s+=(a.retard_s||0);
                 agentMap[a.agent].overtime_s+=(a.overtime_s||0);
             });
         });});
         const sorted=Object.entries(agentMap).sort((a,b)=>a[0].localeCompare(b[0]));
         let ch=`<div style="padding:6px 0;font-size:.72rem;opacity:.7">Période: ${months.length} mois — ${tDays} jours — Taux: ${rateBadge(tExp?((tPres/tExp)*100).toFixed(1):0)}</div>`;
-        ch+='<table class="pres-table"><thead><tr><th>Agent</th><th>Mat.ENF</th><th>Mat.FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Présences</th><th>Absences</th><th>Attendu</th><th>H.Supp</th></tr></thead><tbody>';
+        ch+='<table class="pres-table"><thead><tr><th>Agent</th><th>Mat.ENF</th><th>Mat.FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Présences</th><th>Absences</th><th>Attendu</th><th>H. Retard cumulées</th><th>H.Supp</th></tr></thead><tbody>';
         sorted.forEach(([name,ag])=>{
             ch+=`<tr><td>${name}</td><td style="font-size:.72rem">${ag.matricule||'—'}</td><td style="font-size:.72rem">${ag.matriculeFP||'—'}</td><td style="font-size:.72rem">${ag.grade_code||'—'}</td><td>${ag.genre||'—'}</td><td style="font-size:.72rem">${ag.recrutement_date||'—'}</td>
-                <td style="font-weight:600;color:#10b981">${ag.present}j</td><td style="font-weight:600;color:#ef4444">${ag.absent}j</td><td>${ag.expected}j</td><td style="font-weight:700">${fmtOT(ag.overtime_s)}</td></tr>`;
+                <td style="font-weight:600;color:#10b981">${ag.present}j</td><td style="font-weight:600;color:#ef4444">${ag.absent}j</td><td>${ag.expected}j</td><td style="font-weight:700">${fmtOT(ag.retard_s)}</td><td style="font-weight:700">${fmtOT(ag.overtime_s)}</td></tr>`;
         });
         ch+='</tbody></table>';
         cumWrap.innerHTML=ch;
@@ -643,11 +644,11 @@ async function loadCarrMonth(mois){
                         <span class="section-chevron" id="chev-${dayId}">▼</span>
                     </span>
                 </div><div class="section-body collapsed" id="${dayId}" style="margin-left:28px">
-                    <table class="pres-table"><thead><tr><th>Agent</th><th>Mat.ENF</th><th>Mat.FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>Justifié</th><th>H.Supp</th></tr></thead><tbody>`;
+                    <table class="pres-table"><thead><tr><th>Agent</th><th>Mat.ENF</th><th>Mat.FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>Justifié</th><th>H. Retard</th><th>H.Supp</th></tr></thead><tbody>`;
                 day.agents.forEach(a=>{
                     // Non-disponible personnel: show with distinct marker
                     if (a.non_disponible) {
-                        html+=`<tr style="opacity:.5;background:#f8fafc"><td>${a.agent}</td><td style="font-size:.72rem">${a.matricule||'—'}</td><td style="font-size:.72rem">${a.matriculeFP||'—'}</td><td style="font-size:.72rem">${a.grade_code||'—'}</td><td>${a.genre||'—'}</td><td style="font-size:.72rem">${a.recrutement_date||'—'}</td><td colspan="3" style="text-align:center;font-weight:600;color:#8b5cf6">🚫 ${a.motif_indisponibilite || 'Non disponible'}</td><td>—</td><td>—</td></tr>`;
+                        html+=`<tr style="opacity:.5;background:#f8fafc"><td>${a.agent}</td><td style="font-size:.72rem">${a.matricule||'—'}</td><td style="font-size:.72rem">${a.matriculeFP||'—'}</td><td style="font-size:.72rem">${a.grade_code||'—'}</td><td>${a.genre||'—'}</td><td style="font-size:.72rem">${a.recrutement_date||'—'}</td><td colspan="3" style="text-align:center;font-weight:600;color:#8b5cf6">🚫 ${a.motif_indisponibilite || 'Non disponible'}</td><td>—</td><td>—</td><td>—</td></tr>`;
                         return;
                     }
                     const b=a.present?'<span style="color:#10b981;font-weight:700">✓</span>':'<span style="color:#ef4444;font-weight:700">✗</span>';
@@ -660,7 +661,7 @@ async function loadCarrMonth(mois){
                             justCol = '<span style="color:#f59e0b;font-weight:700;cursor:pointer" onclick="event.stopPropagation();openJustModal(' + a.id_personnel + ',\'' + day.jour + '\',false,\'\')">✗ Non</span>';
                         }
                     }
-                    html+=`<tr><td>${a.agent}</td><td style="font-size:.72rem">${a.matricule||'—'}</td><td style="font-size:.72rem">${a.matriculeFP||'—'}</td><td style="font-size:.72rem">${a.grade_code||'—'}</td><td>${a.genre||'—'}</td><td style="font-size:.72rem">${a.recrutement_date||'—'}</td><td>${a.arrivee}</td><td>${a.depart}</td><td>${b}</td><td>${justCol}</td><td>${a.heures_sup||'—'}</td></tr>`;
+                    html+=`<tr><td>${a.agent}</td><td style="font-size:.72rem">${a.matricule||'—'}</td><td style="font-size:.72rem">${a.matriculeFP||'—'}</td><td style="font-size:.72rem">${a.grade_code||'—'}</td><td>${a.genre||'—'}</td><td style="font-size:.72rem">${a.recrutement_date||'—'}</td><td>${a.arrivee}</td><td>${a.depart}</td><td>${b}</td><td>${justCol}</td><td>${a.heures_retard||'—'}</td><td>${a.heures_sup||'—'}</td></tr>`;
                 });
                 html+='</tbody></table></div>';
             });
@@ -687,7 +688,7 @@ function exportCumulsCarrXls(){
     const tbl=document.querySelector('#carr-cumuls-wrap table');
     if(!tbl)return;
     const wb=XLSX.utils.book_new(),ws=XLSX.utils.table_to_sheet(tbl);
-    ws['!cols']=[{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:12},{wch:10},{wch:10},{wch:10},{wch:12}];
+    ws['!cols']=[{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:12},{wch:10},{wch:10},{wch:10},{wch:12},{wch:12}];
     XLSX.utils.book_append_sheet(wb,ws,'Cumuls');
     XLSX.writeFile(wb,'SMAPRDC_Cumuls_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }

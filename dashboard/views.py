@@ -465,13 +465,16 @@ def presence_personnel_detail(request):
                 arr_s = parse_t(fe) if fe else None
                 dep_s = parse_t(le) if le else None
                 hd_s = parse_t(info['coupon_heureD'])
-                threshold_s = hd_s + tolerance_h * 3600
+                tolerance_s = tolerance_h * 3600
+                threshold_s = hd_s + tolerance_s
                 present = arr_s is not None and arr_s <= threshold_s
                 retard_str = ''
                 retard_s = 0
-                # Retard = arrivée après heureD (ex: arrivée 10h43, heureD 8h00 → retard 2h43)
-                if arr_s is not None and arr_s > hd_s:
-                    retard_s = int(arr_s - hd_s)
+                # Retard = arrivée après heureD, ONLY when agent is PRESENT (not ABSENT)
+                # If absent (arrival > threshold), retard = 0 (they are marked absent instead)
+                # Retard is capped at valeur_retard_academique (tolerance)
+                if present and arr_s is not None and arr_s > hd_s:
+                    retard_s = min(int(arr_s - hd_s), int(tolerance_s))
                     retard_str = f"{int(retard_s//3600)}h{int((retard_s%3600)//60):02d}"
                 # Heures Sup = (dernière sortie – première entrée) – 8h, 0 si négatif
                 hsup_str = ''
