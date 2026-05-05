@@ -703,6 +703,54 @@ def carriere_conges_save(request):
     return Response({'success': True})
 
 
+@api_view(['POST'])
+def carriere_conges_update(request):
+    """Update an existing congé."""
+    data = request.data
+    id_conge = data.get('id_conge')
+    id_congetype = data.get('id_congetype')
+    startdate = data.get('startdate')
+    enddate = data.get('enddate')
+    jours_ouvrables = data.get('jours_ouvrables', 0)
+
+    if not all([id_conge, id_congetype, startdate, enddate]):
+        return Response({'success': False, 'error': 'Champs requis manquants'}, status=400)
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """UPDATE personnel_conges SET id_congetype = %s, startdate = %s, enddate = %s, jours_ouvrables = %s
+               WHERE id_conge = %s""",
+            [id_congetype, startdate, enddate, jours_ouvrables, id_conge]
+        )
+    return Response({'success': True})
+
+
+@api_view(['POST'])
+def carriere_conges_delete(request):
+    """Delete a congé."""
+    data = request.data
+    id_conge = data.get('id_conge')
+    if not id_conge:
+        return Response({'success': False, 'error': 'id_conge requis'}, status=400)
+
+    with connection.cursor() as cursor:
+        cursor.execute("DELETE FROM personnel_conges WHERE id_conge = %s", [id_conge])
+    return Response({'success': True})
+
+
+@api_view(['POST'])
+def carriere_etats_delete(request):
+    """Delete a professional state."""
+    data = request.data
+    id_personnel = data.get('id_personnel')
+    if not id_personnel:
+        return Response({'success': False, 'error': 'id_personnel requis'}, status=400)
+
+    with connection.cursor() as cursor:
+        cursor.execute("DELETE FROM personnel_etatprofessionnel WHERE id_personnel = %s", [id_personnel])
+    return Response({'success': True})
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  JUSTIFICATIFS — CRUD for absence justifications
 #  Table schema: (id_justificatif, id_personnel, id_coupon, motif, justifie, id_user)

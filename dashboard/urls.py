@@ -33,7 +33,10 @@ urlpatterns = [
     path('carriere/api/conge-types', views.carriere_conge_types, name='carriere-conge-types'),
     path('carriere/api/conges', views.carriere_conges, name='carriere-conges'),
     path('carriere/api/etats/save', views.carriere_etats_save, name='carriere-etats-save'),
+    path('carriere/api/etats/delete', views.carriere_etats_delete, name='carriere-etats-delete'),
     path('carriere/api/conges/save', views.carriere_conges_save, name='carriere-conges-save'),
+    path('carriere/api/conges/update', views.carriere_conges_update, name='carriere-conges-update'),
+    path('carriere/api/conges/delete', views.carriere_conges_delete, name='carriere-conges-delete'),
     path('carriere/api/liste-declarative', views.carriere_liste_declarative, name='carriere-liste-declarative'),
 
     # ── Justificatifs ─────────────────────────────────────────────────────

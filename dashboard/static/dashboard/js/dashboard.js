@@ -766,18 +766,16 @@ async function exportPersPDF(mois, wi, di) {
     if (!rows.length) return;
 
     // Compute stats from the days
-    let totalAgents = data.total_expected || 0;
-    let totalPresents = 0, totalAbsents = 0, totalRetard = 0;
+    let totalPresents = 0, totalAbsents = 0, totalRetard = 0, totalAttendus = 0;
     days.forEach(day => {
-        day.agents.forEach(a => {
-            if (a.non_disponible) return;
-        });
         totalPresents += day.presents;
         totalAbsents += day.absents;
         totalRetard += (day.retard_count || 0);
+        totalAttendus += day.attendus;
     });
-    // For single-day, use day-level stats; for multi-day average
     const nbDays = days.length;
+    // Nombre Total d'Agents = agents DISPONIBLES (attendus) for the day(s)
+    const totalAgents = nbDays === 1 ? days[0].attendus : Math.round(totalAttendus / nbDays);
     const seuil = data.seuil_absence || '11h00';
 
     // Format date for display

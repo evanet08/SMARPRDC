@@ -137,7 +137,7 @@ function renderEtats() {
             <td style="font-size:.72rem;color:var(--text-secondary)">${D(e.recrutement_date)}</td>
             <td>${statusBadge(e.parametre,e.sigle)}</td>
             <td style="font-size:.76rem;font-weight:600;color:var(--text-muted)">${e.sigle}</td>
-            <td><button class="btn btn-sm btn-outline" onclick="openEtatModalEdit(${e.id_personnel},${e.id_parametre})">✏️</button></td>
+            <td><button class="btn btn-sm btn-outline" onclick="openEtatModalEdit(${e.id_personnel},${e.id_parametre})" title="Modifier">✏️</button> <button class="btn btn-sm btn-outline" style="color:#ef4444;border-color:#fca5a5" onclick="deleteEtat(${e.id_personnel},'${(e.agent||"").replace(/'/g,"\\'")}')" title="Supprimer">🗑️</button></td>
         </tr>`;
     });
     tbody.innerHTML=html;
@@ -153,6 +153,10 @@ async function saveEtat(){
     const idP=document.getElementById('etat-personnel').value,idPr=document.getElementById('etat-parametre').value;
     if(!idP||!idPr){toast('⚠️ Champs requis','error');return;}
     try{const r=await apiPost(API+'/etats/save',{id_personnel:+idP,id_parametre:+idPr});if(r.success){toast('✅ État mis à jour','success');closeModal('modal-etat');await loadAll();}else toast('❌ '+r.error,'error');}catch(e){toast('❌ Erreur réseau','error');}
+}
+async function deleteEtat(idP,agentName){
+    if(!confirm('Supprimer l\'état professionnel de '+agentName+' ?\nL\'agent sera remis "En Fonction".'))return;
+    try{const r=await apiPost(API+'/etats/delete',{id_personnel:idP});if(r.success){toast('✅ État supprimé','success');await loadAll();}else toast('❌ '+r.error,'error');}catch(e){toast('❌ Erreur réseau','error');}
 }
 
 // ═══ TAB 3: CONGÉS (ACCORDION + TABLE) ═══════════════════════════════════════
@@ -197,7 +201,7 @@ function renderConges() {
             html+='</div>';
 
             html+=`<table class="data-table" style="margin-top:8px"><thead><tr>
-                <th>Type</th><th>Date début</th><th>Date fin</th><th>Jours ouvrables</th><th>Cumul type</th><th>Restant</th><th>Plafond</th><th>Utilisation</th>
+                <th>Type</th><th>Date début</th><th>Date fin</th><th>Jours ouvrables</th><th>Cumul type</th><th>Restant</th><th>Plafond</th><th>Utilisation</th><th>Actions</th>
             </tr></thead><tbody>`;
             data.conges.forEach(c=>{
                 const j=effJours(c);
@@ -214,6 +218,7 @@ function renderConges() {
                     <td style="font-weight:600;color:${reste!==null?(reste<=5?'var(--accent-red)':'var(--accent-emerald)'):'var(--text-muted)'}">${reste!==null?reste:'∞'}</td>
                     <td>${plaf!==null?plaf:'∞'}</td>
                     <td style="min-width:100px">${pct!==null?`<div class="progress-bar"><div class="progress-fill ${barCls}" style="width:${pct}%"></div></div><span style="font-size:.64rem;font-weight:600">${pct.toFixed(0)}%</span>`:'—'}</td>
+                    <td style="white-space:nowrap"><button class="btn btn-sm btn-outline" onclick="editConge(${c.id_conge},${c.id_personnel},${c.id_congetype},'${c.startdate}','${c.enddate}',${c.jours_ouvrables||0})" title="Modifier">✏️</button> <button class="btn btn-sm btn-outline" style="color:#ef4444;border-color:#fca5a5" onclick="deleteConge(${c.id_conge},'${(c.agent||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑️</button></td>
                 </tr>`;
             });
             html+='</tbody></table>';
@@ -249,6 +254,13 @@ function openCongeModal(){
     ['conge-personnel','conge-type','conge-start','conge-end'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('conge-jours').value='';
     document.getElementById('conge-plafond-info').style.display='none';
+    _editCongeId=null;
+    // Ensure modal is in create mode
+    const modal=document.getElementById('modal-conge');
+    const title=modal.querySelector('.modal-header span')||modal.querySelector('.modal-header');
+    if(title)title.textContent='🏖️ Nouveau congé';
+    const saveBtn=modal.querySelector('button[onclick*="updateConge"]')||modal.querySelector('button[onclick*="saveConge"]');
+    if(saveBtn){saveBtn.textContent='💾 Enregistrer';saveBtn.setAttribute('onclick','saveConge()');}
     openModal('modal-conge');
 }
 
@@ -289,6 +301,66 @@ async function saveConge(){
         if(r.success){toast('✅ Congé enregistré','success');closeModal('modal-conge');await loadAll();}
         else toast('❌ '+r.error,'error');
     }catch(e){toast('❌ Erreur réseau','error');}
+}
+
+// Edit congé: pre-fill the modal and switch to update mode
+let _editCongeId = null;
+function editConge(idConge, idP, idCT, start, end, jours) {
+    _editCongeId = idConge;
+    document.getElementById('conge-personnel').value = idP;
+    document.getElementById('conge-type').value = idCT;
+    document.getElementById('conge-start').value = start;
+    document.getElementById('conge-end').value = end;
+    document.getElementById('conge-jours').value = jours || '';
+    onCongeTypeChange();
+    // Change modal title and button to indicate edit mode
+    const modal = document.getElementById('modal-conge');
+    const title = modal.querySelector('.modal-header span') || modal.querySelector('.modal-header');
+    if (title) title.textContent = '✏️ Modifier le congé';
+    const saveBtn = modal.querySelector('button[onclick*="saveConge"]') || modal.querySelector('.modal-footer .btn-primary, .modal-footer button:last-child');
+    if (saveBtn) { saveBtn.textContent = '💾 Modifier'; saveBtn.setAttribute('onclick', 'updateConge()'); }
+    openModal('modal-conge');
+}
+
+async function updateConge() {
+    if (!_editCongeId) { toast('⚠️ Aucun congé sélectionné', 'error'); return; }
+    const idCT = document.getElementById('conge-type').value;
+    const start = document.getElementById('conge-start').value;
+    const end = document.getElementById('conge-end').value;
+    const jours = parseInt(document.getElementById('conge-jours').value) || 0;
+
+    if (!idCT || !start || !end || jours < 1) { toast('⚠️ Champs requis', 'error'); return; }
+    if (new Date(start) > new Date(end)) { toast('⚠️ Dates invalides', 'error'); return; }
+
+    try {
+        const r = await apiPost(API + '/conges/update', { id_conge: _editCongeId, id_congetype: +idCT, startdate: start, enddate: end, jours_ouvrables: jours });
+        if (r.success) {
+            toast('✅ Congé modifié', 'success');
+            closeModal('modal-conge');
+            _editCongeId = null;
+            // Reset modal to create mode
+            _resetCongeModal();
+            await loadAll();
+        } else toast('❌ ' + r.error, 'error');
+    } catch (e) { toast('❌ Erreur réseau', 'error'); }
+}
+
+async function deleteConge(idConge, agentName) {
+    if (!confirm('Supprimer ce congé de ' + agentName + ' ?')) return;
+    try {
+        const r = await apiPost(API + '/conges/delete', { id_conge: idConge });
+        if (r.success) { toast('✅ Congé supprimé', 'success'); await loadAll(); }
+        else toast('❌ ' + r.error, 'error');
+    } catch (e) { toast('❌ Erreur réseau', 'error'); }
+}
+
+function _resetCongeModal() {
+    _editCongeId = null;
+    const modal = document.getElementById('modal-conge');
+    const title = modal.querySelector('.modal-header span') || modal.querySelector('.modal-header');
+    if (title) title.textContent = '🏖️ Nouveau congé';
+    const saveBtn = modal.querySelector('button[onclick*="updateConge"]') || modal.querySelector('.modal-footer .btn-primary, .modal-footer button:last-child');
+    if (saveBtn) { saveBtn.textContent = '💾 Enregistrer'; saveBtn.setAttribute('onclick', 'saveConge()'); }
 }
 
 // ═══ EXPORT PDF / EXCEL ══════════════════════════════════════════════════════
@@ -505,10 +577,11 @@ async function exportCarrPresPDF(mois,wi,di){
     const rows=_presRows(days);if(!rows.length)return;
 
     // Compute stats
-    let totalAgents=data.total_expected||0;
-    let totalPresents=0,totalAbsents=0,totalRetard=0;
-    days.forEach(day=>{totalPresents+=day.presents;totalAbsents+=day.absents;totalRetard+=(day.retard_count||0);});
+    let totalPresents=0,totalAbsents=0,totalRetard=0,totalAttendus=0;
+    days.forEach(day=>{totalPresents+=day.presents;totalAbsents+=day.absents;totalRetard+=(day.retard_count||0);totalAttendus+=day.attendus;});
     const nbDays=days.length;
+    // Nombre Total d'Agents = agents DISPONIBLES (attendus) for the day(s)
+    const totalAgents=nbDays===1?days[0].attendus:Math.round(totalAttendus/nbDays);
     const seuil=data.seuil_absence||'11h00';
     function fmtDateC(d){const p=d.split('-');return p.length===3?p[2]+'-'+p[1]+'-'+p[0]:d;}
 
