@@ -758,7 +758,7 @@ async function loadListeDeclarative() {
         renderDeclarative();
     } catch (e) {
         console.error('[Carrière] Liste Déclarative:', e);
-        document.getElementById('tbody-declarative').innerHTML = '<tr><td colspan="16" class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Erreur de chargement</div></td></tr>';
+        document.getElementById('tbody-declarative').innerHTML = '<tr><td colspan="17" class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Erreur de chargement</div></td></tr>';
     }
 }
 
@@ -768,22 +768,23 @@ function renderDeclarative() {
         const age = _calcAge(p.date_naissance);
         const anc = _calcAnciennete(p.date_engagement);
         html += `<tr data-name="${(p.nom_complet || '').toLowerCase()}">
-            <td style="font-weight:600;color:var(--text-muted);font-size:.72rem">${i + 1}</td>
-            <td style="font-size:.76rem">${D(p.matricule)}</td>
-            <td style="font-weight:600;white-space:nowrap">${D(p.nom_complet)}</td>
-            <td>${D(p.genre)}</td>
-            <td style="font-size:.72rem">${D(p.date_naissance)}</td>
-            <td style="font-size:.76rem">${D(p.province_origine)}</td>
-            <td style="font-size:.76rem;font-weight:600">${D(p.niveau_etudes)}</td>
-            <td style="font-size:.72rem">${D(p.domaine_etudes)}</td>
-            <td style="font-size:.76rem">${D(p.matriculeFP)}</td>
-            <td style="font-size:.72rem">${D(p.date_engagement)}</td>
-            <td style="font-size:.76rem;font-weight:600">${D(p.grade_stat)}</td>
-            <td style="font-size:.72rem">${D(p.ref_acte_engagement)}</td>
-            <td style="font-size:.76rem">${D(p.fonction)}</td>
-            <td style="font-size:.72rem">${D(p.acte_nomination)}</td>
-            <td style="font-weight:600;color:var(--accent-indigo)">${age}</td>
-            <td style="font-weight:600;color:var(--accent-emerald)">${anc}</td>
+            <td style="font-weight:600;color:var(--text-muted);font-size:.68rem">${i + 1}</td>
+            <td style="font-size:.7rem">${D(p.matricule)}</td>
+            <td style="font-weight:600;font-size:.72rem;white-space:nowrap">${D(p.nom_complet)}</td>
+            <td style="font-size:.7rem">${D(p.genre)}</td>
+            <td style="font-size:.68rem">${D(p.date_naissance)}</td>
+            <td style="font-size:.68rem">${D(p.province_origine)}</td>
+            <td style="font-size:.7rem;font-weight:600">${D(p.niveau_etudes)}</td>
+            <td style="font-size:.68rem">${D(p.domaine_etudes)}</td>
+            <td style="font-size:.68rem">${D(p.etablissement)}</td>
+            <td style="font-size:.7rem">${D(p.matriculeFP)}</td>
+            <td style="font-size:.68rem">${D(p.date_engagement)}</td>
+            <td style="font-size:.7rem;font-weight:600">${D(p.grade_stat)}</td>
+            <td style="font-size:.68rem">${D(p.ref_acte_engagement)}</td>
+            <td style="font-size:.7rem">${D(p.fonction)}</td>
+            <td style="font-size:.68rem">${D(p.acte_nomination)}</td>
+            <td style="font-weight:600;color:var(--accent-indigo);font-size:.7rem">${age}</td>
+            <td style="font-weight:600;color:var(--accent-emerald);font-size:.7rem">${anc}</td>
         </tr>`;
     });
     document.getElementById('tbody-declarative').innerHTML = html;
@@ -803,15 +804,15 @@ function filterDeclarative() {
 
 // ═══ LISTE DÉCLARATIVE EXPORTS ═══════════════════════════════════════════════
 
-const _DECL_HDR = ['#', 'Matricule', 'Nom & Post Nom', 'Sexe', 'Date de naissance',
-    "Province d'origine", "Niveau d'études", "Domaine d'études",
-    'Matricule FP', 'Date adm. sous statut', 'Grade Stat',
-    'Réf. Acte juridique', 'Fonction', 'Acte de nomination', 'Âge', 'Ancienneté'];
+const _DECL_HDR = ['#', 'Mat.', 'Nom & Post Nom', 'Sexe', 'Dt Naiss.',
+    'Prov. Orig.', 'Niv. Ét.', 'Dom. Ét.', 'Étab. Ét.',
+    'Mat. FP', 'Dt Adm. Stat.', 'Gr. Stat',
+    'Réf. Acte Jur.', 'Fonction', 'Acte Nom.', 'Âge', 'Anc.'];
 
 function _declRows() {
     return _listeDeclarative.map((p, i) => [
         i + 1, D(p.matricule), D(p.nom_complet), D(p.genre), D(p.date_naissance),
-        D(p.province_origine), D(p.niveau_etudes), D(p.domaine_etudes),
+        D(p.province_origine), D(p.niveau_etudes), D(p.domaine_etudes), D(p.etablissement),
         D(p.matriculeFP), D(p.date_engagement), D(p.grade_stat),
         D(p.ref_acte_engagement), D(p.fonction), D(p.acte_nomination),
         _calcAge(p.date_naissance), _calcAnciennete(p.date_engagement)
@@ -944,7 +945,7 @@ function exportDeclarativeExcel() {
     const ws = XLSX.utils.aoa_to_sheet(rows);
     ws['!cols'] = [
         { wch: 5 }, { wch: 12 }, { wch: 35 }, { wch: 6 }, { wch: 14 },
-        { wch: 18 }, { wch: 10 }, { wch: 28 }, { wch: 14 }, { wch: 16 },
+        { wch: 18 }, { wch: 10 }, { wch: 28 }, { wch: 22 }, { wch: 14 }, { wch: 16 },
         { wch: 10 }, { wch: 20 }, { wch: 22 }, { wch: 22 }, { wch: 10 }, { wch: 14 }
     ];
     XLSX.utils.book_append_sheet(wb, ws, 'Liste Déclarative');

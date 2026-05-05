@@ -536,7 +536,7 @@ body {
 
 /* ── Liste Déclarative Table ─────────────────────────────────────────── */
 #table-declarative {
-    min-width: 1400px;
+    min-width: 1550px;
 }
 #table-declarative th {
     font-size: .64rem;

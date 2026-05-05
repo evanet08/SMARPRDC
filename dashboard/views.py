@@ -613,7 +613,8 @@ def carriere_liste_declarative(request):
                IFNULL(ga.code,'—') AS grade_stat,
                p.fonction,
                p.acte_nomination,
-               p.ref_acte_engagement
+               p.ref_acte_engagement,
+               p.etablissement
         FROM personnel p
         LEFT JOIN personnel_grade gr ON gr.id_grade = p.id_grade
         LEFT JOIN personnel_specialite sp ON sp.id_specialite = p.id_specialite
