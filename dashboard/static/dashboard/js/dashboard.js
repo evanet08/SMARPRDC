@@ -785,7 +785,7 @@ async function exportPersPDF(mois, wi, di) {
         return d;
     }
 
-    const { doc, startY, drawHeader, pageW, pageH, M } = await _pdfDocInst('Présences Personnel — ' + label);
+    const { doc, startY, drawHeader, pageW, pageH, M } = await _pdfDocInst('Présences Personnel');
 
     // ── Sub-header: Type de Rapport / Date / Décompte ──
     let sy = startY;
@@ -861,6 +861,13 @@ async function exportPersPDF(mois, wi, di) {
     doc.setFont(undefined, 'bold');
     const presPct = totalAgents ? ((totalPresents / (nbDays > 1 ? totalAgents * nbDays : totalAgents)) * 100).toFixed(2) : '0.00';
     doc.text('  ' + totalPresents + ', soit ' + presPct + ' %', synthX - 2, fy);
+    fy += 6;
+
+    doc.setFont(undefined, 'normal');
+    doc.text('Nombre d\'Agents Absents :', synthX - 2, fy, { align: 'right' });
+    doc.setFont(undefined, 'bold');
+    const absPct = totalAgents ? ((totalAbsents / (nbDays > 1 ? totalAgents * nbDays : totalAgents)) * 100).toFixed(2) : '0.00';
+    doc.text('  ' + totalAbsents + ', soit ' + absPct + ' %', synthX - 2, fy);
     fy += 6;
 
     doc.setFont(undefined, 'normal');

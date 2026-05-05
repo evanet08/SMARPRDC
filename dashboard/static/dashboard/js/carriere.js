@@ -585,7 +585,7 @@ async function exportCarrPresPDF(mois,wi,di){
     const seuil=data.seuil_absence||'11h00';
     function fmtDateC(d){const p=d.split('-');return p.length===3?p[2]+'-'+p[1]+'-'+p[0]:d;}
 
-    const {doc,startY,drawHeader,pageW,pageH,M}=await _carrPdfDocInst('Présences Personnel — '+label);
+    const {doc,startY,drawHeader,pageW,pageH,M}=await _carrPdfDocInst('Présences Personnel');
 
     // Sub-header
     let sy=startY;
@@ -645,6 +645,11 @@ async function exportCarrPresPDF(mois,wi,di){
     doc.setFont(undefined,'bold');
     const pp=totalAgents?((totalPresents/(nbDays>1?totalAgents*nbDays:totalAgents))*100).toFixed(2):'0.00';
     doc.text('  '+totalPresents+', soit '+pp+' %',sX-2,fy);fy+=6;
+    doc.setFont(undefined,'normal');
+    doc.text('Nombre d\'Agents Absents :',sX-2,fy,{align:'right'});
+    doc.setFont(undefined,'bold');
+    const ap=totalAgents?((totalAbsents/(nbDays>1?totalAgents*nbDays:totalAgents))*100).toFixed(2):'0.00';
+    doc.text('  '+totalAbsents+', soit '+ap+' %',sX-2,fy);fy+=6;
     doc.setFont(undefined,'normal');
     doc.text('Nombre d\'Agents Arrivés en Retard :',sX-2,fy,{align:'right'});
     doc.setFont(undefined,'bold');
