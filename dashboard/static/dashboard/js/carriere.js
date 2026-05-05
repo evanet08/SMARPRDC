@@ -608,13 +608,19 @@ async function exportCarrPresPDF(mois,wi,di){
 
     // Footer helper
     function drawFoot(d,pgNum){
-        const footY=pageH-6;
-        d.setFontSize(4.8);d.setFont(undefined,'italic');d.setTextColor(80);
-        d.text('Présence des agents gérées conjointement par SMAPRDC et LMDSoft conçues et propulsées par NEXORA TECH',M+1,footY);
-        d.setFontSize(4.5);d.setFont(undefined,'normal');
-        d.text('✉ info@enf-rdc.cd  |  ☎ (+243)994034954  |  🌐 enf-rdc.cd',pageW-M-1,footY,{align:'right'});
-        d.setFontSize(5);d.setFont(undefined,'bold');d.setTextColor(120);
-        d.text('Page '+pgNum,pageW/2,footY+3,{align:'center'});
+        const footY=pageH-10;
+        // Border-top line
+        d.setDrawColor(0);d.setLineWidth(0.4);
+        d.line(M,footY-1,pageW-M,footY-1);
+        // Left column
+        d.setFontSize(6.5);d.setFont(undefined,'bold');d.setTextColor(40);
+        d.text('Présence des agents gérées conjointement par SMAPRDC et LMDSoft conçues et propulsées par NEXORA TECH',M+1,footY+2);
+        // Right column
+        d.setFontSize(6);d.setFont(undefined,'bold');d.setTextColor(60);
+        d.text('✉ info@enf-rdc.cd  |  ☎ (+243)994034954  |  🌐 enf-rdc.cd',pageW-M-1,footY+2,{align:'right'});
+        // Page number
+        d.setFontSize(6);d.setFont(undefined,'bold');d.setTextColor(100);
+        d.text('Page '+pgNum,pageW/2,footY+6,{align:'center'});
         d.setTextColor(0);
     }
 
@@ -623,7 +629,7 @@ async function exportCarrPresPDF(mois,wi,di){
         head:[PRES_HDR],body:rows,
         styles:{fontSize:6,cellPadding:1.2,lineColor:[0,0,0],lineWidth:0.1,textColor:[0,0,0]},
         headStyles:{fillColor:[16,185,129],textColor:[255,255,255]},
-        margin:{left:M,right:M,top:sy,bottom:16},
+        margin:{left:M,right:M,top:sy,bottom:20},
         didDrawPage:function(d){
             drawFoot(doc,d.pageNumber);
             if(d.pageNumber===1)d.settings.margin.top=10;
