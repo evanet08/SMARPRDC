@@ -419,16 +419,17 @@ async function exportPresProPDF(days, label, filename) {
         },
         margin: { left: M, right: M, top: HDR_H, bottom: 22 },
         didDrawPage: function (data) {
-            if (data.pageNumber > 1) _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW);
+            // Footer only — header is NOT repeated on subsequent pages
             _drawPdfFooter(doc, inst, pageW, pageH);
+            // Set top margin for subsequent pages (no header)
+            if (data.pageNumber === 1) data.settings.margin.top = 10;
         }
     });
 
     const finalY = doc.lastAutoTable.finalY || (pageH - 35);
     if (finalY + 25 > pageH - 15) {
         doc.addPage();
-        _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW);
-        _drawSignatures(doc, pageW, HDR_H + 5);
+        _drawSignatures(doc, pageW, 15);
         _drawPdfFooter(doc, inst, pageW, pageH);
     } else {
         _drawSignatures(doc, pageW, finalY);

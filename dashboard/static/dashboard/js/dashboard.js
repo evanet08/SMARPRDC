@@ -770,11 +770,13 @@ async function exportPersPDF(mois, wi, di) {
         headStyles: { fillColor: [16,185,129], textColor: [255,255,255] },
         margin: { left: M, right: M, top: startY, bottom: 10 },
         didDrawPage: function(data) {
-            if (data.pageNumber > 1) drawHeader(doc);
+            // Footer only — header is NOT repeated on subsequent pages
             doc.setFontSize(5.5); doc.setFont(undefined, 'normal'); doc.setTextColor(100);
             doc.text('SMAPRDC — Présences Personnel', M + 2, pageH - 4);
             doc.text('Page ' + data.pageNumber, pageW - M - 2, pageH - 4, { align: 'right' });
             doc.setTextColor(0);
+            // Set top margin for subsequent pages (no header)
+            if (data.pageNumber === 1) data.settings.margin.top = 10;
         }
     });
     doc.save('Personnel_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf');
@@ -798,7 +800,7 @@ async function exportCumulsPDF() {
     if (!tbl) return;
     const { doc, startY, drawHeader, pageW, pageH, M } = await _pdfDocInst('Cumuls Heures Supplémentaires');
     doc.autoTable({ html: tbl, startY: startY, styles: { fontSize: 7, cellPadding: 1.5, lineColor: [0,0,0], lineWidth: 0.1, textColor: [0,0,0] }, headStyles: { fillColor: [245,158,11] }, margin: { left: M, right: M, top: startY, bottom: 10 },
-        didDrawPage: function(data) { if (data.pageNumber > 1) drawHeader(doc); doc.setFontSize(5.5); doc.setFont(undefined, 'normal'); doc.setTextColor(100); doc.text('SMAPRDC — Cumuls', M+2, pageH-4); doc.text('Page '+data.pageNumber, pageW-M-2, pageH-4, {align:'right'}); doc.setTextColor(0); }
+        didDrawPage: function(data) { doc.setFontSize(5.5); doc.setFont(undefined, 'normal'); doc.setTextColor(100); doc.text('SMAPRDC — Cumuls', M+2, pageH-4); doc.text('Page '+data.pageNumber, pageW-M-2, pageH-4, {align:'right'}); doc.setTextColor(0); if (data.pageNumber === 1) data.settings.margin.top = 10; }
     });
     doc.save('Cumuls_Heures_Supp.pdf');
 }

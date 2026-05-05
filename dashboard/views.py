@@ -477,9 +477,10 @@ def presence_personnel_detail(request):
                     retard_s = min(int(arr_s - hd_s), int(tolerance_s))
                     retard_str = f"{int(retard_s//3600)}h{int((retard_s%3600)//60):02d}"
                 # Heures Sup = (dernière sortie – première entrée) – 8h, 0 si négatif
+                # ONLY for PRESENT agents (absent agents get zero heures sup)
                 hsup_str = ''
                 hsup_s = 0
-                if arr_s is not None and dep_s is not None:
+                if present and arr_s is not None and dep_s is not None:
                     worked_s = dep_s - arr_s
                     overtime_raw = worked_s - 8 * 3600  # 8h standard
                     if overtime_raw > 0:
