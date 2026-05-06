@@ -430,23 +430,28 @@ def presence_personnel_detail(request):
 
             # ── Check per-date availability ──────────────────────────
             unavail_reason = None
+            unavail_sigle = ''
             non_enfx = _has_non_enfx_etat(aid)
             if non_enfx:
                 unavail_reason = non_enfx['parametre']
+                unavail_sigle = non_enfx['sigle']
             elif _is_on_conge(aid, jour_dt):
                 unavail_reason = 'En congé'
+                unavail_sigle = 'Cg'
 
             if unavail_reason:
                 # Person is NOT AVAILABLE on this date:
                 # - NOT counted in expected
                 # - NOT counted as absent
                 # - Shown with 'non_disponible' flag for frontend display
+                # - sigle_indisponibilite: the sigle from etatprofessionnel_parametres (or 'Cg' for congé)
                 day_list.append({'agent': pers['agent'], **_pinfo, 'arrivee': '—',
                                  'depart': '—', 'present': False,
                                  'heures_retard': '', 'retard_s': 0,
                                  'heures_sup': '', 'overtime_s': 0,
                                  'justifie': None, 'motif': '', 'id_justificatif': None,
-                                 'non_disponible': True, 'motif_indisponibilite': unavail_reason})
+                                 'non_disponible': True, 'motif_indisponibilite': unavail_reason,
+                                 'sigle_indisponibilite': unavail_sigle})
                 continue
 
             # Person IS AVAILABLE on this date → count toward expected
@@ -491,7 +496,8 @@ def presence_personnel_detail(request):
                                  'heures_retard': retard_str, 'retard_s': retard_s,
                                  'heures_sup': hsup_str, 'overtime_s': hsup_s,
                                  'justifie': None, 'motif': '', 'id_justificatif': None,
-                                 'non_disponible': False, 'motif_indisponibilite': ''})
+                                 'non_disponible': False, 'motif_indisponibilite': '',
+                                 'sigle_indisponibilite': ''})
             else:
                 # AVAILABLE but ABSENT — include justification data
                 jk = f"{aid}|{jour}"
@@ -502,7 +508,8 @@ def presence_personnel_detail(request):
                                  'heures_sup': '', 'overtime_s': 0,
                                  'justifie': jdata['justifie'], 'motif': jdata['motif'],
                                  'id_justificatif': jdata['id_justificatif'],
-                                 'non_disponible': False, 'motif_indisponibilite': ''})
+                                 'non_disponible': False, 'motif_indisponibilite': '',
+                                 'sigle_indisponibilite': ''})
 
         # Sort alphabetically by agent name
         day_list.sort(key=lambda x: x['agent'])

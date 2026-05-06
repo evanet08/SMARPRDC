@@ -55,7 +55,6 @@ function _buildAgentIndex(days) {
     const map = {};
     days.forEach(day => {
         day.agents.forEach(a => {
-            if (a.non_disponible) return;
             if (!map[a.id_personnel]) {
                 map[a.id_personnel] = {
                     id: a.id_personnel,
@@ -75,8 +74,13 @@ function _buildPresenceMatrix(days, agents) {
     agents.forEach(ag => { matrix[ag.id] = {}; });
     days.forEach(day => {
         day.agents.forEach(a => {
-            if (a.non_disponible || !matrix[a.id_personnel]) return;
-            matrix[a.id_personnel][day.jour] = a.present ? 'P' : 'A';
+            if (!matrix[a.id_personnel]) return;
+            if (a.non_disponible) {
+                // Show the sigle of the professional state (e.g. 'Cg', 'Dét', etc.)
+                matrix[a.id_personnel][day.jour] = a.sigle_indisponibilite || 'N/D';
+            } else {
+                matrix[a.id_personnel][day.jour] = a.present ? 'P' : 'A';
+            }
         });
     });
     return matrix;
@@ -87,7 +91,8 @@ function _buildOvertimeMap(days, agents) {
     agents.forEach(ag => { map[ag.id] = 0; });
     days.forEach(day => {
         day.agents.forEach(a => {
-            if (a.non_disponible || !map.hasOwnProperty(a.id_personnel)) return;
+            if (!map.hasOwnProperty(a.id_personnel)) return;
+            if (a.non_disponible) return; // No overtime tracking for unavailable agents
             map[a.id_personnel] += (a.overtime_s || 0);
         });
     });
@@ -99,7 +104,8 @@ function _buildRetardMap(days, agents) {
     agents.forEach(ag => { map[ag.id] = 0; });
     days.forEach(day => {
         day.agents.forEach(a => {
-            if (a.non_disponible || !map.hasOwnProperty(a.id_personnel)) return;
+            if (!map.hasOwnProperty(a.id_personnel)) return;
+            if (a.non_disponible) return; // No retard tracking for unavailable agents
             map[a.id_personnel] += (a.retard_s || 0);
         });
     });
@@ -248,7 +254,8 @@ async function exportPresProPDF(days, label, filename) {
             const v = (matrix[ag.id] || {})[d] || '';
             row.push(v);
             if (v === 'P') pres++;
-            if (v === 'A') abs++;
+            else if (v === 'A') abs++;
+            // else: sigle (indisponible) — not counted as P or A
         });
         const tot = pres + abs;
         const presPct = tot ? ((pres / tot) * 100).toFixed(2) : '0';
@@ -346,7 +353,8 @@ async function exportPresProPDF(days, label, filename) {
                 }
                 if (ri < agentCount && ci >= dateColStart && ci < dateColEnd) {
                     if (val === 'P') data.cell.styles.textColor = [0, 100, 0];
-                    if (val === 'A') { data.cell.styles.textColor = [200, 0, 0]; data.cell.styles.fontStyle = 'bold'; }
+                    else if (val === 'A') { data.cell.styles.textColor = [200, 0, 0]; data.cell.styles.fontStyle = 'bold'; }
+                    else if (val && val !== '') { data.cell.styles.textColor = [120, 60, 200]; data.cell.styles.fontStyle = 'bold'; } // sigle indisponibilité (purple)
                 }
                 if (ci === 2) data.cell.styles.halign = 'left';
             }
@@ -473,7 +481,7 @@ async function exportPresProXls(days, label, filename) {
     agents.forEach((ag, i) => {
         const row = [i + 1, ag.matricule, ag.agent, ag.matriculeFP, ag.grade_code];
         let pres = 0, abs = 0;
-        dateStrs.forEach(d => { const v = (matrix[ag.id] || {})[d] || ''; row.push(v); if (v === 'P') pres++; if (v === 'A') abs++; });
+        dateStrs.forEach(d => { const v = (matrix[ag.id] || {})[d] || ''; row.push(v); if (v === 'P') pres++; else if (v === 'A') abs++; });
         const t = pres + abs;
         row.push(pres, t ? ((pres / t) * 100).toFixed(2) : '0', abs, t ? ((abs / t) * 100).toFixed(2) : '0', _fmtOTh(retardMap[ag.id]), _fmtOTh(overtimeMap[ag.id]));
         rows.push(row);
