@@ -9,6 +9,7 @@
 
 let _instCache = null;
 const _logoCache = {};
+let _siglesCache = null;
 
 async function _getInstitution() {
     if (_instCache) return _instCache;
@@ -118,10 +119,58 @@ function _fmtOTh(secs) {
     return h + 'h' + (m < 10 ? '0' : '') + m;
 }
 
+async function _fetchSigles() {
+    if (_siglesCache) return _siglesCache;
+    try {
+        const res = await fetch('/carriere/api/parametres');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        _siglesCache = await res.json();
+    } catch (e) { _siglesCache = []; }
+    // Always include Cg for congé
+    if (!_siglesCache.find(s => s.sigle === 'Cg')) _siglesCache.push({ sigle: 'Cg', parametre: 'Congé' });
+    return _siglesCache;
+}
+
+function _drawLegend(doc, sigles, matrix, agents, dateStrs, startY, pageW, pageH, M) {
+    // Collect only sigles actually used in this report
+    const used = new Set();
+    agents.forEach(ag => { dateStrs.forEach(d => { const v = (matrix[ag.id] || {})[d] || ''; if (v && v !== 'P' && v !== 'A') used.add(v); }); });
+    if (used.size === 0) return startY;
+    const items = sigles.filter(s => used.has(s.sigle));
+    if (items.length === 0) return startY;
+    // Check page space
+    const needed = 8 + items.length * 4;
+    let y = startY;
+    if (y + needed > pageH - 20) { doc.addPage(); y = 12; }
+    y += 5;
+    doc.setDrawColor(150); doc.setLineWidth(0.2);
+    doc.line(M + 5, y, pageW / 3, y); y += 4;
+    doc.setFontSize(7); doc.setFont(undefined, 'bold'); doc.setTextColor(80, 40, 160);
+    doc.text('LÉGENDE DES SIGLES', M + 6, y); y += 4;
+    doc.setFont(undefined, 'normal'); doc.setTextColor(0);
+    doc.setFontSize(6.5);
+    items.forEach(s => {
+        doc.setFont(undefined, 'bold'); doc.setTextColor(120, 60, 200);
+        doc.text(s.sigle, M + 8, y);
+        doc.setFont(undefined, 'normal'); doc.setTextColor(60);
+        doc.text(' = ' + (s.parametre || ''), M + 8 + doc.getTextWidth(s.sigle) + 1, y);
+        y += 3.5;
+    });
+    // Also add P/A
+    doc.setFont(undefined, 'bold'); doc.setTextColor(0, 100, 0);
+    doc.text('P', M + 8, y); doc.setFont(undefined, 'normal'); doc.setTextColor(60);
+    doc.text(' = Présent', M + 8 + doc.getTextWidth('P') + 1, y); y += 3.5;
+    doc.setFont(undefined, 'bold'); doc.setTextColor(200, 0, 0);
+    doc.text('A', M + 8, y); doc.setFont(undefined, 'normal'); doc.setTextColor(60);
+    doc.text(' = Absent', M + 8 + doc.getTextWidth('A') + 1, y); y += 3.5;
+    doc.setTextColor(0);
+    return y;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //  PDF HEADER (fixed height = HDR_H mm)
 // ═══════════════════════════════════════════════════════════════════════════════
-const HDR_H = 46;
+const HDR_H = 44;
 
 function _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW) {
     const cX = pageW / 2;
@@ -174,6 +223,7 @@ function _drawSignatures(doc, pageW, startY) {
 
 async function exportPresProPDF(days, label, filename) {
     if (!days || !days.length) return;
+    const sigles = await _fetchSigles();
     const inst = await _getInstitution();
     const logos = {
         left: await _loadImageAsBase64(inst.logo_pays_url || '/static/dashboard/img/logoRDC.jpg'),
@@ -209,8 +259,8 @@ async function exportPresProPDF(days, label, filename) {
     const ID_NUM_W = 6, ID_MAT_W = 15, ID_MATFP_W = 13, ID_GRADE_W = 8;
     const fixedIdNoName = ID_NUM_W + ID_MAT_W + ID_MATFP_W + ID_GRADE_W;
 
-    const DATE_CW_BASE = 7;
-    const sumBaseW = [8, 7, 8, 7, 11, 11];
+    const DATE_CW_BASE = 6.5;
+    const sumBaseW = [7, 7, 7, 7, 10, 10];
     const sumBaseTotal = sumBaseW.reduce((a, b) => a + b, 0);
 
     const NAME_MAX = nbJours <= 7 ? 55 : 65;
@@ -295,8 +345,8 @@ async function exportPresProPDF(days, label, filename) {
     for (let i = dateColStart; i < dateColEnd; i++) cs[i] = { cellWidth: DATE_CW, halign: 'center' };
     for (let i = 0; i < SUM; i++) cs[sumStart + i] = { cellWidth: sumW[i], halign: 'center' };
 
-    const fs = nbJours <= 7 ? 7 : (nbJours <= 15 ? 5.5 : (nbJours <= 22 ? 4.5 : 4));
-    const HDR_CELL_H = 28; // taller header row to fit rotated text without overflow
+    const fs = nbJours <= 7 ? 6.5 : (nbJours <= 15 ? 5.5 : (nbJours <= 22 ? 4.5 : 4));
+    const HDR_CELL_H = 32;
     const agentCount = agents.length;
 
     // Track first-page header cell positions for manual group titles
@@ -320,7 +370,6 @@ async function exportPresProPDF(days, label, filename) {
         didParseCell: function (data) {
             const ri = data.row.index, ci = data.column.index, val = data.cell.raw;
             if (data.row.section === 'head') {
-                // Row 0: all date+summary cells — suppress text, set tall height
                 if (ri === 0 && ci >= dateColStart) {
                     data.cell.text = [];
                     data.cell.styles.minCellHeight = HDR_CELL_H;
@@ -328,33 +377,45 @@ async function exportPresProPDF(days, label, filename) {
                 if (ri === 0 && ci < dateColStart) {
                     data.cell.styles.minCellHeight = HDR_CELL_H;
                     data.cell.styles.valign = 'middle';
+                    data.cell.styles.fillColor = [235, 240, 250];
                 }
-                // Rows 1-3: hide fixed cols (0-3) and summary cols (rowspan=4 effect)
+                // Summary header row 0: light blue bg
+                if (ri === 0 && ci >= sumStart) {
+                    data.cell.styles.fillColor = [230, 235, 255];
+                }
+                // Date header row 0: light green bg
+                if (ri === 0 && ci >= dateColStart && ci < dateColEnd) {
+                    data.cell.styles.fillColor = [235, 250, 240];
+                }
                 if (ri > 0 && (ci < FIXED - 1 || ci >= sumStart)) {
                     data.cell.text = [];
                     data.cell.styles.lineWidth = 0;
                     data.cell.styles.fillColor = [255, 255, 255];
                 }
                 if (ri > 0 && ci === FIXED - 1) {
-                    data.cell.styles.fillColor = [240, 240, 240];
+                    data.cell.styles.fillColor = [245, 245, 245];
                     data.cell.styles.fontStyle = 'bold';
                     data.cell.styles.fontSize = fs - 0.5;
                 }
                 if (ri > 0 && ci >= dateColStart && ci < dateColEnd) {
-                    data.cell.styles.fillColor = [240, 240, 240];
+                    data.cell.styles.fillColor = [245, 250, 248];
                     data.cell.styles.fontStyle = 'bold';
                     data.cell.styles.fontSize = fs - 0.5;
                 }
             }
             if (data.row.section === 'body') {
+                // Zebra striping
+                if (ri < agentCount && ri % 2 === 1) {
+                    data.cell.styles.fillColor = [250, 250, 255];
+                }
                 if (ri >= agentCount) {
                     data.cell.styles.fontStyle = 'bold';
-                    data.cell.styles.fillColor = [245, 245, 245];
+                    data.cell.styles.fillColor = [240, 240, 245];
                 }
                 if (ri < agentCount && ci >= dateColStart && ci < dateColEnd) {
-                    if (val === 'P') data.cell.styles.textColor = [0, 100, 0];
+                    if (val === 'P') data.cell.styles.textColor = [0, 120, 0];
                     else if (val === 'A') { data.cell.styles.textColor = [200, 0, 0]; data.cell.styles.fontStyle = 'bold'; }
-                    else if (val && val !== '') { data.cell.styles.textColor = [120, 60, 200]; data.cell.styles.fontStyle = 'bold'; } // sigle indisponibilité (purple)
+                    else if (val && val !== '') { data.cell.styles.textColor = [120, 60, 200]; data.cell.styles.fontStyle = 'bold'; }
                 }
                 if (ci === 2) data.cell.styles.halign = 'left';
             }
@@ -364,66 +425,26 @@ async function exportPresProPDF(days, label, filename) {
             const ci = data.column.index;
             if (ci < dateColStart) return;
             const cell = data.cell;
-
-            // Store summary cell positions for group title drawing
-            if (ci >= sumStart) {
-                _sumCellPositions[ci] = { x: cell.x, y: cell.y, w: cell.width, h: cell.height };
-            }
-
-            // Date columns: rotated date labels
+            if (ci >= sumStart) { _sumCellPositions[ci] = { x: cell.x, y: cell.y, w: cell.width, h: cell.height }; }
+            // Date columns: rotated labels, well centered
             if (ci >= dateColStart && ci < dateColEnd) {
-                const label = dateCols[ci - dateColStart] || '';
-                if (!label) return;
-                doc.setFontSize(fs - 0.5);
-                doc.setFont(undefined, 'bold');
-                doc.setTextColor(0, 0, 0);
-                const cx = cell.x + cell.width / 2 + 0.5;
-                const cy = cell.y + cell.height - 1;
-                doc.text(label, cx, cy, { angle: 90, align: 'left' });
+                const lbl = dateCols[ci - dateColStart] || '';
+                if (!lbl) return;
+                doc.setFontSize(fs - 0.5); doc.setFont(undefined, 'bold'); doc.setTextColor(30, 60, 30);
+                const cx = cell.x + cell.width / 2 + 0.8;
+                doc.text(lbl, cx, cell.y + cell.height - 2, { angle: 90, align: 'left' });
             }
-
-            // Summary columns 4,5 (Retard, Sup): rotated text
-            if (ci === sumStart + 4 || ci === sumStart + 5) {
-                const lbl = ci === sumStart + 4 ? 'Heures Retard Cumulées' : 'Heures Sup Cumulées';
-                doc.setFontSize(fs - 0.5);
-                doc.setFont(undefined, 'bold');
-                doc.setTextColor(0, 0, 0);
-                const cx = cell.x + cell.width / 2 + 0.5;
-                const cy = cell.y + cell.height - 1;
-                doc.text(lbl, cx, cy, { angle: 90, align: 'left' });
+            // Summary columns: all rotated for consistency
+            if (ci >= sumStart) {
+                const labels = ['Prés. Nbre', 'Prés. %', 'Abs. Nbre', 'Abs. %', 'H. Retard Cum.', 'H. Sup Cum.'];
+                const colors = [[0,100,0],[0,100,0],[180,0,0],[180,0,0],[100,70,0],[0,60,140]];
+                const idx = ci - sumStart;
+                doc.setFontSize(fs - 0.5); doc.setFont(undefined, 'bold');
+                doc.setTextColor(colors[idx][0], colors[idx][1], colors[idx][2]);
+                const cx = cell.x + cell.width / 2 + 0.8;
+                doc.text(labels[idx], cx, cell.y + cell.height - 2, { angle: 90, align: 'left' });
             }
-
-            // Summary columns 0,1 (Prés Nbre, %): sub-labels "Nbre" / "%" horizontal at bottom
-            // Summary columns 2,3 (Abs Nbre, %): same
-            if (ci >= sumStart && ci <= sumStart + 3) {
-                const subLabel = (ci === sumStart || ci === sumStart + 2) ? 'Nbre' : '%';
-                doc.setFontSize(fs - 1);
-                doc.setFont(undefined, 'bold');
-                doc.setTextColor(0, 0, 0);
-                const cx = cell.x + cell.width / 2;
-                const cy = cell.y + cell.height - 1.5;
-                doc.text(subLabel, cx, cy, { align: 'center' });
-            }
-
-            // After last summary cell drawn: draw group titles spanning 2 cols
-            if (ci === sumStart + 5) {
-                const p0 = _sumCellPositions[sumStart];
-                const p1 = _sumCellPositions[sumStart + 1];
-                const p2 = _sumCellPositions[sumStart + 2];
-                const p3 = _sumCellPositions[sumStart + 3];
-                if (p0 && p1 && p2 && p3) {
-                    doc.setFontSize(fs);
-                    doc.setFont(undefined, 'bold');
-                    doc.setTextColor(0, 0, 0);
-                    // "Présences Cumulées" spanning cols 0-1
-                    const presCx = p0.x + (p0.w + p1.w) / 2;
-                    const presRotY = p0.y + p0.h - 1;
-                    doc.text('Présences Cumulées', presCx + 0.5, presRotY, { angle: 90, align: 'left' });
-                    // "Absences Cumulées" spanning cols 2-3
-                    const absCx = p2.x + (p2.w + p3.w) / 2;
-                    doc.text('Absences Cumulées', absCx + 0.5, presRotY, { angle: 90, align: 'left' });
-                }
-            }
+            doc.setTextColor(0);
         },
         margin: { left: M, right: M, top: HDR_H, bottom: 22 },
         didDrawPage: function (data) {
@@ -434,8 +455,11 @@ async function exportPresProPDF(days, label, filename) {
         }
     });
 
-    const finalY = doc.lastAutoTable.finalY || (pageH - 35);
-    if (finalY + 25 > pageH - 15) {
+    let finalY = doc.lastAutoTable.finalY || (pageH - 35);
+    // Draw legend (only sigles actually used)
+    finalY = _drawLegend(doc, sigles, matrix, agents, dateStrs, finalY, pageW, pageH, M);
+    // Signatures
+    if (finalY + 28 > pageH - 15) {
         doc.addPage();
         _drawSignatures(doc, pageW, 15);
         _drawPdfFooter(doc, inst, pageW, pageH);
