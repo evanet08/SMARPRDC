@@ -470,14 +470,14 @@ async function loadMonthWeeks(mois) {
                         <span class="section-chevron" id="chev-${dayId}">▼</span>
                     </span>
                 </div><div class="section-body collapsed" id="${dayId}" style="margin-left:28px">
-                    <table class="pres-table"><thead><tr><th>Agent</th><th>Mat. ENF</th><th>Mat. FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>Justifié</th><th>H. Retard</th><th>H. Sup</th></tr></thead><tbody>`;
+                    <table class="pres-table"><thead><tr><th>Agent</th><th>Mat. ENF</th><th>Mat. FP</th><th>Grade</th><th>Genre</th><th>Arrivée</th><th>Départ</th><th>Mention</th><th>Justifié</th><th>H. Retard</th><th>H. Sup</th></tr></thead><tbody>`;
                 day.agents.forEach(a => {
                     // Non-disponible personnel: show with distinct marker
                     if (a.non_disponible) {
-                        html += `<tr style="opacity:.5;background:#f8fafc"><td>${a.agent}</td><td style="font-size:.72rem">${a.matricule||'—'}</td><td style="font-size:.72rem">${a.matriculeFP||'—'}</td><td style="font-size:.72rem">${a.grade_code||'—'}</td><td>${a.genre||'—'}</td><td style="font-size:.72rem">${a.recrutement_date||'—'}</td><td colspan="3" style="text-align:center;font-weight:600;color:#8b5cf6">🚫 ${a.motif_indisponibilite || 'Non disponible'}</td><td>—</td><td>—</td><td>—</td></tr>`;
+                        html += `<tr style="opacity:.5;background:#f8fafc"><td style="text-align:left">${a.agent}</td><td style="font-size:.72rem;text-align:center">${a.matricule||'—'}</td><td style="font-size:.72rem;text-align:center">${a.matriculeFP||'—'}</td><td style="font-size:.72rem;text-align:center">${a.grade_code||'—'}</td><td style="text-align:center">${a.genre||'—'}</td><td colspan="3" style="text-align:center;font-weight:600;color:#8b5cf6">🚫 ${a.motif_indisponibilite || 'Non disponible'}</td><td style="text-align:center">—</td><td style="text-align:center">—</td><td style="text-align:center">—</td></tr>`;
                         return;
                     }
-                    const b = a.present ? '<span style="color:#10b981;font-weight:700">✓ Oui</span>' : '<span style="color:#ef4444;font-weight:700">✗ Non</span>';
+                    const b = a.present ? '<span style="color:#10b981;font-weight:700">P</span>' : '<span style="color:#ef4444;font-weight:700">A</span>';
                     let justCol = '—';
                     if (!a.present) {
                         if (a.justifie) {
@@ -487,7 +487,7 @@ async function loadMonthWeeks(mois) {
                             justCol = '<span style="color:#f59e0b;font-weight:700;cursor:pointer" onclick="event.stopPropagation();openJustModal(' + a.id_personnel + ',\'' + day.jour + '\',false,\'\')">✗ Non</span>';
                         }
                     }
-                    html += `<tr><td>${a.agent}</td><td style="font-size:.72rem">${a.matricule||'—'}</td><td style="font-size:.72rem">${a.matriculeFP||'—'}</td><td style="font-size:.72rem">${a.grade_code||'—'}</td><td>${a.genre||'—'}</td><td style="font-size:.72rem">${a.recrutement_date||'—'}</td><td>${a.arrivee}</td><td>${a.depart}</td><td>${b}</td><td>${justCol}</td><td>${a.heures_retard || '—'}</td><td>${a.heures_sup || '—'}</td></tr>`;
+                    html += `<tr><td style="text-align:left">${a.agent}</td><td style="font-size:.72rem;text-align:center">${a.matricule||'—'}</td><td style="font-size:.72rem;text-align:center">${a.matriculeFP||'—'}</td><td style="font-size:.72rem;text-align:center">${a.grade_code||'—'}</td><td style="text-align:center">${a.genre||'—'}</td><td style="text-align:center">${a.arrivee}</td><td style="text-align:center">${a.depart}</td><td style="text-align:center">${b}</td><td style="text-align:center">${justCol}</td><td style="text-align:center">${a.heures_retard || '—'}</td><td style="text-align:center">${a.heures_sup || '—'}</td></tr>`;
                 });
                 html += '</tbody></table></div>';
             });
@@ -609,20 +609,19 @@ async function loadPersonnelCumuls() {
         const sorted = Object.entries(agentMap).sort((a, b) => a[0].localeCompare(b[0]));
 
         let html = `<div style="padding:8px 0;font-size:.72rem;opacity:.7">Période: ${months.length} mois — ${totalDays} jours travaillés — Taux global: ${rateBadge(totalExpected ? ((totalPresent/totalExpected)*100).toFixed(1) : 0)}</div>`;
-        html += '<table class="pres-table"><thead><tr><th>Agent</th><th>Mat. ENF</th><th>Mat. FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Présences</th><th>Absences</th><th>Total attendu</th><th>H. Retard cumulées</th><th>H. Sup cumulées</th></tr></thead><tbody>';
+        html += '<table class="pres-table"><thead><tr><th>Agent</th><th>Mat. ENF</th><th>Mat. FP</th><th>Grade</th><th>Genre</th><th>Présences</th><th>Absences</th><th>Total attendu</th><th>H. Retard cumulées</th><th>H. Sup cumulées</th></tr></thead><tbody>';
         sorted.forEach(([name, ag]) => {
             html += `<tr>
-                <td>${name}</td>
-                <td style="font-size:.72rem">${ag.matricule||'—'}</td>
-                <td style="font-size:.72rem">${ag.matriculeFP||'—'}</td>
-                <td style="font-size:.72rem">${ag.grade_code||'—'}</td>
-                <td>${ag.genre||'—'}</td>
-                <td style="font-size:.72rem">${ag.recrutement_date||'—'}</td>
-                <td style="font-weight:600;color:#10b981">${ag.present} jour${ag.present > 1 ? 's' : ''}</td>
-                <td style="font-weight:600;color:#ef4444">${ag.absent} jour${ag.absent > 1 ? 's' : ''}</td>
-                <td>${ag.expected} jour${ag.expected > 1 ? 's' : ''}</td>
-                <td style="font-weight:700">${fmtOT(ag.retard_s)}</td>
-                <td style="font-weight:700">${fmtOT(ag.overtime_s)}</td>
+                <td style="text-align:left">${name}</td>
+                <td style="font-size:.72rem;text-align:center">${ag.matricule||'—'}</td>
+                <td style="font-size:.72rem;text-align:center">${ag.matriculeFP||'—'}</td>
+                <td style="font-size:.72rem;text-align:center">${ag.grade_code||'—'}</td>
+                <td style="text-align:center">${ag.genre||'—'}</td>
+                <td style="font-weight:600;color:#10b981;text-align:center">${ag.present} jour${ag.present > 1 ? 's' : ''}</td>
+                <td style="font-weight:600;color:#ef4444;text-align:center">${ag.absent} jour${ag.absent > 1 ? 's' : ''}</td>
+                <td style="text-align:center">${ag.expected} jour${ag.expected > 1 ? 's' : ''}</td>
+                <td style="font-weight:700;text-align:center">${fmtOT(ag.retard_s)}</td>
+                <td style="font-weight:700;text-align:center">${fmtOT(ag.overtime_s)}</td>
             </tr>`;
         });
         html += '</tbody></table>';
@@ -677,7 +676,7 @@ function _persRows(mois, wi, di) {
             if (a.non_disponible) return;
             let justLabel = '—';
             if (!a.present) justLabel = a.justifie ? 'Oui' : 'Non';
-            rows.push([a.agent, a.matricule||'—', a.matriculeFP||'—', a.grade_code||'—', a.genre||'—', a.recrutement_date||'—', day.jour, a.arrivee || '—', a.depart || '—', a.present ? 'Oui' : 'Non', justLabel, a.motif || '', a.heures_retard || '', a.heures_sup || '']);
+            rows.push([a.agent, a.matricule||'—', a.matriculeFP||'—', a.grade_code||'—', a.genre||'—', a.arrivee || '—', a.depart || '—', a.present ? 'P' : 'A', justLabel, a.motif || '', a.heures_retard || '', a.heures_sup || '']);
         });
     });
     return rows;
@@ -699,19 +698,23 @@ async function _pdfDocInst(title) {
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
     const inst = (typeof _getInstitution === 'function') ? await _getInstitution() : {};
-    const logo = (typeof _loadImageAsBase64 === 'function') ? await _loadImageAsBase64(inst.logo_ministere_url || '/static/dashboard/img/logoMinFin.png') : null;
+    const logoENF = (typeof _loadImageAsBase64 === 'function') ? await _loadImageAsBase64(inst.logo_url || '/static/dashboard/img/logoENF.png') : null;
+    const logoMinFin = (typeof _loadImageAsBase64 === 'function') ? await _loadImageAsBase64(inst.logo_ministere_url || '/static/dashboard/img/logoMinFin.png') : null;
     const M = 3;
 
     function drawHeader(d) {
         const cX = pageW / 2;
         let y = 6;
+        // Logo ENF à l'extrême gauche
+        if (logoENF) { try { d.addImage(logoENF, 'PNG', M + 2, 4, 22, 22); } catch(e) {} }
+        // Logo MinFin à l'extrême droite
+        if (logoMinFin) { try { d.addImage(logoMinFin, 'PNG', pageW - M - 24, 4, 22, 22); } catch(e) {} }
         d.setFontSize(9); d.setFont(undefined, 'bold');
         d.text('REPUBLIQUE DEMOCRATIQUE DU CONGO', cX, y, { align: 'center' }); y += 4.5;
         d.setFontSize(8);
         d.text('MINISTERE DES FINANCES', cX, y, { align: 'center' }); y += 4;
         d.text('SECRETARIAT GENERAL AUX FINANCES', cX, y, { align: 'center' }); y += 3;
-        if (logo) { try { d.addImage(logo, 'PNG', cX - 8, y, 16, 16); } catch(e){} }
-        y += 18;
+        y += 5;
         d.setFontSize(8.5); d.setFont(undefined, 'bold');
         d.text('ECOLE NATIONALE DES FINANCES', cX, y, { align: 'center' }); y += 4;
         d.text('DIRECTION DES RESSOURCES', cX, y, { align: 'center' }); y += 4;
@@ -827,7 +830,7 @@ async function exportPersPDF(mois, wi, di) {
 
     doc.autoTable({
         startY: sy,
-        head: [['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','Justifié','Motif','H.Retard','H.Sup']],
+        head: [['Agent','Mat.ENF','Mat.FP','Grade','Genre','Arrivée','Départ','Mention','Justifié','Motif','H.Retard','H.Sup']],
         body: rows,
         styles: { fontSize: 6, cellPadding: 1.2, lineColor: [0,0,0], lineWidth: 0.1, textColor: [0,0,0] },
         headStyles: { fillColor: [16,185,129], textColor: [255,255,255] },
@@ -899,8 +902,8 @@ function exportPersXls(mois, wi, di) {
     if (di !== undefined) label = _persData[mois].weeks[wi].days[di].jour;
     else if (wi !== undefined) label = _persData[mois].weeks[wi].label;
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','Justifié','Motif','H.Retard','H.Sup'], ...rows]);
-    ws['!cols'] = [{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:25},{wch:12},{wch:12}];
+    const ws = XLSX.utils.aoa_to_sheet([['Agent','Mat.ENF','Mat.FP','Grade','Genre','Arrivée','Départ','Mention','Justifié','Motif','H.Retard','H.Sup'], ...rows]);
+    ws['!cols'] = [{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:10},{wch:10},{wch:10},{wch:10},{wch:25},{wch:12},{wch:12}];
     XLSX.utils.book_append_sheet(wb, ws, 'Personnel');
     XLSX.writeFile(wb, 'Personnel_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.xlsx');
 }
@@ -938,7 +941,7 @@ async function exportGlobalPDF() {
     if (allPersRows.length) {
         doc.addPage();
         doc.setFontSize(12); doc.text('Présences Personnel', 14, 15);
-        doc.autoTable({ startY: 20, head: [['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','Justifié','Motif','H.Supp']], body: allPersRows, styles: { fontSize: 6, cellPadding: 1.2 }, headStyles: { fillColor: [16,185,129] } });
+        doc.autoTable({ startY: 20, head: [['Agent','Mat.ENF','Mat.FP','Grade','Genre','Arrivée','Départ','Mention','Justifié','Motif','H.Supp']], body: allPersRows, styles: { fontSize: 6, cellPadding: 1.2 }, headStyles: { fillColor: [16,185,129] } });
     }
     // Cumuls
     const tbl = document.querySelector('#pres-personnel-cumuls table');
@@ -961,7 +964,7 @@ async function exportGlobalExcel() {
     const allPersRows = [];
     Object.keys(_persData).forEach(m => { allPersRows.push(..._persRows(m)); });
     if (allPersRows.length) {
-        const ws = XLSX.utils.aoa_to_sheet([['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','Justifié','Motif','H.Supp'], ...allPersRows]);
+        const ws = XLSX.utils.aoa_to_sheet([['Agent','Mat.ENF','Mat.FP','Grade','Genre','Arrivée','Départ','Mention','Justifié','Motif','H.Supp'], ...allPersRows]);
         ws['!cols'] = [{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:25},{wch:12}];
         XLSX.utils.book_append_sheet(wb, ws, 'Personnel');
     }

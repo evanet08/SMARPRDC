@@ -80,10 +80,7 @@ function renderHero() {
     _personnel.forEach(p=>{const e=etatMap[p.id_personnel];if(!e||e.sigle==='EnFx')enFx++;else if(['EnCA','EnCC','EnCM'].includes(e.sigle))enConge++;else other++;});
     document.getElementById('hero-summary').innerHTML=
         heroCard('c1','Personnel Total',fmt(total),'Administratif en fonction','👥')+
-        heroCard('c7','Disponible',fmt(enFx),`${total?((enFx/total)*100).toFixed(1):0}%`,'✅')+
-        heroCard('c3','En Congé',fmt(enConge),`${total?((enConge/total)*100).toFixed(1):0}%`,'🏖️')+
-        heroCard('c5','Autres États',fmt(other),'Détachement, Mission, etc.','📋')+
-        heroCard('c6','Congés Enregistrés',fmt(_conges.length),'Année en cours','📅');
+        heroCard('c7','Disponible',fmt(enFx),`${total?((enFx/total)*100).toFixed(1):0}%`,'✅');
 }
 
 // ═══ TAB 1: VUE GLOBALE ══════════════════════════════════════════════════════
@@ -526,14 +523,14 @@ function getWeekRange(dateStr){
 
 // Data store for exports
 var _carrPresData = {};
-const PRES_HDR = ['Agent','Mat.ENF','Mat.FP','Grade','Genre','Embauche','Date','Arrivée','Départ','Présence','H.Retard','H.Supp'];
+const PRES_HDR = ['Agent','Mat.ENF','Mat.FP','Grade','Genre','Arrivée','Départ','Mention','H.Retard','H.Supp'];
 
 function _presRows(days){
     const rows=[];
     days.forEach(day=>{day.agents.forEach(a=>{
         // Skip non-disponible personnel (congé, état non-EnFx)
         if(a.non_disponible) return;
-        rows.push([a.agent,a.matricule||'—',a.matriculeFP||'—',a.grade_code||'—',a.genre||'—',a.recrutement_date||'—',day.jour,a.arrivee||'—',a.depart||'—',a.present?'Oui':'Non',a.heures_retard||'',a.heures_sup||'']);
+        rows.push([a.agent,a.matricule||'—',a.matriculeFP||'—',a.grade_code||'—',a.genre||'—',a.arrivee||'—',a.depart||'—',a.present?'P':'A',a.heures_retard||'',a.heures_sup||'']);
     });});
     return rows;
 }
@@ -544,17 +541,21 @@ async function _carrPdfDocInst(title){
     const pageW=doc.internal.pageSize.getWidth();
     const pageH=doc.internal.pageSize.getHeight();
     const inst=(typeof _getInstitution==='function')?await _getInstitution():{};
-    const logo=(typeof _loadImageAsBase64==='function')?await _loadImageAsBase64(inst.logo_ministere_url||'/static/dashboard/img/logoMinFin.png'):null;
+    const logoENF=(typeof _loadImageAsBase64==='function')?await _loadImageAsBase64(inst.logo_url||'/static/dashboard/img/logoENF.png'):null;
+    const logoMinFin=(typeof _loadImageAsBase64==='function')?await _loadImageAsBase64(inst.logo_ministere_url||'/static/dashboard/img/logoMinFin.png'):null;
     const M=3;
     function drawHeader(d){
         const cX=pageW/2;let y=6;
+        // Logo ENF à l'extrême gauche
+        if(logoENF){try{d.addImage(logoENF,'PNG',M+2,4,22,22);}catch(e){}}
+        // Logo MinFin à l'extrême droite
+        if(logoMinFin){try{d.addImage(logoMinFin,'PNG',pageW-M-24,4,22,22);}catch(e){}}
         d.setFontSize(9);d.setFont(undefined,'bold');
         d.text('REPUBLIQUE DEMOCRATIQUE DU CONGO',cX,y,{align:'center'});y+=4.5;
         d.setFontSize(8);
         d.text('MINISTERE DES FINANCES',cX,y,{align:'center'});y+=4;
         d.text('SECRETARIAT GENERAL AUX FINANCES',cX,y,{align:'center'});y+=3;
-        if(logo){try{d.addImage(logo,'PNG',cX-8,y,16,16);}catch(e){}}
-        y+=18;
+        y+=5;
         d.setFontSize(8.5);d.setFont(undefined,'bold');
         d.text('ECOLE NATIONALE DES FINANCES',cX,y,{align:'center'});y+=4;
         d.text('DIRECTION DES RESSOURCES',cX,y,{align:'center'});y+=4;
@@ -632,29 +633,59 @@ async function exportCarrPresPDF(mois,wi,di){
         }
     });
 
-    // Synthesis section
+    // Synthesis section: [Gauche: stats par état] [Droite: synthèse]
     let fy=doc.lastAutoTable.finalY||(pageH-40);
-    const needNew=fy+35>pageH-16;
+    let needNew=fy+45>pageH-16;
     if(needNew){doc.addPage();fy=15;}else{fy+=8;}
-    const sX=pageW/2;
-    doc.setFontSize(8);doc.setFont(undefined,'normal');doc.setTextColor(0);
-    doc.text('Nombre Total d\'Agents :',sX-2,fy,{align:'right'});
-    doc.setFont(undefined,'bold');doc.text('  '+totalAgents,sX-2,fy);fy+=6;
+
+    // ── LEFT SIDE: Nombre d'agents par état professionnel ──
+    const leftX=M+5;
+    let lyS=fy;
+    doc.setFontSize(7.5);doc.setFont(undefined,'bold');doc.setTextColor(0);
+    doc.text('Effectif par État Professionnel :',leftX,lyS);lyS+=5;
+    // Build état counts from available data
+    const etatCountMap={};
+    const etatMapLocal={};_etats.forEach(e=>{etatMapLocal[e.id_personnel]=e;});
+    _personnel.forEach(p=>{
+        const e=etatMapLocal[p.id_personnel];
+        const label=e?displayEtat(e.parametre):'Disponible';
+        if(!etatCountMap[label])etatCountMap[label]=0;
+        etatCountMap[label]++;
+    });
+    doc.setFontSize(7);doc.setFont(undefined,'normal');
+    Object.entries(etatCountMap).sort((a,b)=>b[1]-a[1]).forEach(([label,count])=>{
+        doc.setFont(undefined,'normal');doc.setTextColor(60);
+        doc.text('• '+label+' :',leftX+2,lyS);
+        doc.setFont(undefined,'bold');doc.setTextColor(0);
+        doc.text(' '+count,leftX+2+doc.getTextWidth('• '+label+' :')+1,lyS);
+        lyS+=4;
+    });
+
+    // ── RIGHT SIDE: Synthèse existante ──
+    const sX=pageW*0.65;
+    let ryS=fy;
+    doc.setFontSize(7.5);doc.setFont(undefined,'bold');doc.setTextColor(0);
+    doc.text('Synthèse :',sX-40,ryS);ryS+=5;
+    doc.setFontSize(7);doc.setFont(undefined,'normal');doc.setTextColor(0);
+    doc.text('Nombre Total d\'Agents :',sX-2,ryS,{align:'right'});
+    doc.setFont(undefined,'bold');doc.text('  '+totalAgents,sX-2,ryS);ryS+=5;
     doc.setFont(undefined,'normal');
-    doc.text('Nombre d\'Agents présents :',sX-2,fy,{align:'right'});
+    doc.text('Nombre d\'Agents présents :',sX-2,ryS,{align:'right'});
     doc.setFont(undefined,'bold');
     const pp=totalAgents?((totalPresents/(nbDays>1?totalAgents*nbDays:totalAgents))*100).toFixed(2):'0.00';
-    doc.text('  '+totalPresents+', soit '+pp+' %',sX-2,fy);fy+=6;
+    doc.text('  '+totalPresents+', soit '+pp+' %',sX-2,ryS);ryS+=5;
     doc.setFont(undefined,'normal');
-    doc.text('Nombre d\'Agents Absents :',sX-2,fy,{align:'right'});
+    doc.text('Nombre d\'Agents Absents :',sX-2,ryS,{align:'right'});
     doc.setFont(undefined,'bold');
     const ap=totalAgents?((totalAbsents/(nbDays>1?totalAgents*nbDays:totalAgents))*100).toFixed(2):'0.00';
-    doc.text('  '+totalAbsents+', soit '+ap+' %',sX-2,fy);fy+=6;
+    doc.text('  '+totalAbsents+', soit '+ap+' %',sX-2,ryS);ryS+=5;
     doc.setFont(undefined,'normal');
-    doc.text('Nombre d\'Agents Arrivés en Retard :',sX-2,fy,{align:'right'});
+    doc.text('Nombre d\'Agents Arrivés en Retard :',sX-2,ryS,{align:'right'});
     doc.setFont(undefined,'bold');
     const rp=totalPresents?((totalRetard/totalPresents)*100).toFixed(2):'0.00';
-    doc.text('  '+totalRetard+' sur '+totalPresents+', soit '+rp+' %',sX-2,fy);
+    doc.text('  '+totalRetard+' sur '+totalPresents+', soit '+rp+' %',sX-2,ryS);
+
+    fy=Math.max(lyS,ryS);
 
     // Signataires
     fy+=12;
@@ -679,7 +710,7 @@ function exportCarrPresXls(mois,wi,di){
     else{days=data.days;const p=mois.split('-');label=MOIS_FR[parseInt(p[1])]+' '+p[0];}
     const rows=_presRows(days);if(!rows.length)return;
     const wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet([PRES_HDR,...rows]);
-    ws['!cols']=[{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:12},{wch:12}];
+    ws['!cols']=[{wch:30},{wch:12},{wch:12},{wch:10},{wch:6},{wch:10},{wch:10},{wch:10},{wch:12},{wch:12}];
     XLSX.utils.book_append_sheet(wb,ws,'Présences');
     XLSX.writeFile(wb,'Presences_'+label.replace(/[^a-zA-Z0-9]/g,'_')+'.xlsx');
 }
@@ -729,10 +760,10 @@ async function loadCarrierePresence(){
         });});
         const sorted=Object.entries(agentMap).sort((a,b)=>a[0].localeCompare(b[0]));
         let ch=`<div style="padding:6px 0;font-size:.72rem;opacity:.7">Période: ${months.length} mois — ${tDays} jours — Taux: ${rateBadge(tExp?((tPres/tExp)*100).toFixed(1):0)}</div>`;
-        ch+='<table class="pres-table"><thead><tr><th>Agent</th><th>Mat.ENF</th><th>Mat.FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Présences</th><th>Absences</th><th>Attendu</th><th>H. Retard cumulées</th><th>H.Supp</th></tr></thead><tbody>';
+        ch+='<table class="pres-table"><thead><tr><th>Agent</th><th>Mat.ENF</th><th>Mat.FP</th><th>Grade</th><th>Genre</th><th>Présences</th><th>Absences</th><th>Attendu</th><th>H. Retard cumulées</th><th>H.Supp</th></tr></thead><tbody>';
         sorted.forEach(([name,ag])=>{
-            ch+=`<tr><td>${name}</td><td style="font-size:.72rem">${ag.matricule||'—'}</td><td style="font-size:.72rem">${ag.matriculeFP||'—'}</td><td style="font-size:.72rem">${ag.grade_code||'—'}</td><td>${ag.genre||'—'}</td><td style="font-size:.72rem">${ag.recrutement_date||'—'}</td>
-                <td style="font-weight:600;color:#10b981">${ag.present}j</td><td style="font-weight:600;color:#ef4444">${ag.absent}j</td><td>${ag.expected}j</td><td style="font-weight:700">${fmtOT(ag.retard_s)}</td><td style="font-weight:700">${fmtOT(ag.overtime_s)}</td></tr>`;
+            ch+=`<tr><td style="text-align:left">${name}</td><td style="font-size:.72rem;text-align:center">${ag.matricule||'—'}</td><td style="font-size:.72rem;text-align:center">${ag.matriculeFP||'—'}</td><td style="font-size:.72rem;text-align:center">${ag.grade_code||'—'}</td><td style="text-align:center">${ag.genre||'—'}</td>
+                <td style="font-weight:600;color:#10b981;text-align:center">${ag.present}j</td><td style="font-weight:600;color:#ef4444;text-align:center">${ag.absent}j</td><td style="text-align:center">${ag.expected}j</td><td style="font-weight:700;text-align:center">${fmtOT(ag.retard_s)}</td><td style="font-weight:700;text-align:center">${fmtOT(ag.overtime_s)}</td></tr>`;
         });
         ch+='</tbody></table>';
         cumWrap.innerHTML=ch;
@@ -795,14 +826,14 @@ async function loadCarrMonth(mois){
                         <span class="section-chevron" id="chev-${dayId}">▼</span>
                     </span>
                 </div><div class="section-body collapsed" id="${dayId}" style="margin-left:28px">
-                    <table class="pres-table"><thead><tr><th>Agent</th><th>Mat.ENF</th><th>Mat.FP</th><th>Grade</th><th>Genre</th><th>Embauche</th><th>Arrivée</th><th>Départ</th><th>Présent</th><th>Justifié</th><th>H. Retard</th><th>H.Supp</th></tr></thead><tbody>`;
+                    <table class="pres-table"><thead><tr><th>Agent</th><th>Mat.ENF</th><th>Mat.FP</th><th>Grade</th><th>Genre</th><th>Arrivée</th><th>Départ</th><th>Mention</th><th>Justifié</th><th>H. Retard</th><th>H.Supp</th></tr></thead><tbody>`;
                 day.agents.forEach(a=>{
                     // Non-disponible personnel: show with distinct marker
                     if (a.non_disponible) {
-                        html+=`<tr style="opacity:.5;background:#f8fafc"><td>${a.agent}</td><td style="font-size:.72rem">${a.matricule||'—'}</td><td style="font-size:.72rem">${a.matriculeFP||'—'}</td><td style="font-size:.72rem">${a.grade_code||'—'}</td><td>${a.genre||'—'}</td><td style="font-size:.72rem">${a.recrutement_date||'—'}</td><td colspan="3" style="text-align:center;font-weight:600;color:#8b5cf6">🚫 ${a.motif_indisponibilite || 'Non disponible'}</td><td>—</td><td>—</td><td>—</td></tr>`;
+                        html+=`<tr style="opacity:.5;background:#f8fafc"><td style="text-align:left">${a.agent}</td><td style="font-size:.72rem;text-align:center">${a.matricule||'—'}</td><td style="font-size:.72rem;text-align:center">${a.matriculeFP||'—'}</td><td style="font-size:.72rem;text-align:center">${a.grade_code||'—'}</td><td style="text-align:center">${a.genre||'—'}</td><td colspan="3" style="text-align:center;font-weight:600;color:#8b5cf6">🚫 ${a.motif_indisponibilite || 'Non disponible'}</td><td style="text-align:center">—</td><td style="text-align:center">—</td><td style="text-align:center">—</td></tr>`;
                         return;
                     }
-                    const b=a.present?'<span style="color:#10b981;font-weight:700">✓</span>':'<span style="color:#ef4444;font-weight:700">✗</span>';
+                    const b=a.present?'<span style="color:#10b981;font-weight:700">P</span>':'<span style="color:#ef4444;font-weight:700">A</span>';
                     let justCol = '—';
                     if (!a.present) {
                         if (a.justifie) {
@@ -812,7 +843,7 @@ async function loadCarrMonth(mois){
                             justCol = '<span style="color:#f59e0b;font-weight:700;cursor:pointer" onclick="event.stopPropagation();openJustModal(' + a.id_personnel + ',\'' + day.jour + '\',false,\'\')">✗ Non</span>';
                         }
                     }
-                    html+=`<tr><td>${a.agent}</td><td style="font-size:.72rem">${a.matricule||'—'}</td><td style="font-size:.72rem">${a.matriculeFP||'—'}</td><td style="font-size:.72rem">${a.grade_code||'—'}</td><td>${a.genre||'—'}</td><td style="font-size:.72rem">${a.recrutement_date||'—'}</td><td>${a.arrivee}</td><td>${a.depart}</td><td>${b}</td><td>${justCol}</td><td>${a.heures_retard||'—'}</td><td>${a.heures_sup||'—'}</td></tr>`;
+                    html+=`<tr><td style="text-align:left">${a.agent}</td><td style="font-size:.72rem;text-align:center">${a.matricule||'—'}</td><td style="font-size:.72rem;text-align:center">${a.matriculeFP||'—'}</td><td style="font-size:.72rem;text-align:center">${a.grade_code||'—'}</td><td style="text-align:center">${a.genre||'—'}</td><td style="text-align:center">${a.arrivee}</td><td style="text-align:center">${a.depart}</td><td style="text-align:center">${b}</td><td style="text-align:center">${justCol}</td><td style="text-align:center">${a.heures_retard||'—'}</td><td style="text-align:center">${a.heures_sup||'—'}</td></tr>`;
                 });
                 html+='</tbody></table></div>';
             });

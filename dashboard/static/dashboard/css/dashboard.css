@@ -441,16 +441,19 @@ body {
     background: var(--accent-indigo);
     color: #fff;
     padding: 10px 12px;
-    text-align: left;
+    text-align: center;
     font-weight: 600;
     font-size: .72rem;
     text-transform: uppercase;
     letter-spacing: .4px;
 }
+.pres-table th:first-child { text-align: left; }
 .pres-table td {
     padding: 8px 12px;
     border-bottom: 1px solid var(--border-light);
+    text-align: center;
 }
+.pres-table td:first-child { text-align: left; }
 .pres-table tbody tr:hover { background: #f8fafc; }
 .pres-table.pres-sub { margin: 8px 0; }
 .pres-table.pres-sub th { background: #64748b; font-size: .68rem; }

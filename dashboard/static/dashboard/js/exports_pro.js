@@ -174,7 +174,7 @@ const HDR_H = 44;
 
 function _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW) {
     const cX = pageW / 2;
-    if (logos.left) { try { doc.addImage(logos.left, 'JPEG', 8, 4, 22, 22); } catch(e){} }
+    if (logos.left) { try { doc.addImage(logos.left, 'PNG', 8, 4, 22, 22); } catch(e){} }
     if (logos.right) { try { doc.addImage(logos.right, 'PNG', pageW - 30, 4, 22, 22); } catch(e){} }
     doc.setFontSize(9); doc.setFont(undefined, 'bold');
     doc.text((inst.ministere || 'MINISTERE DES FINANCES').toUpperCase(), cX, 9, { align: 'center' });
@@ -226,8 +226,8 @@ async function exportPresProPDF(days, label, filename) {
     const sigles = await _fetchSigles();
     const inst = await _getInstitution();
     const logos = {
-        left: await _loadImageAsBase64(inst.logo_pays_url || '/static/dashboard/img/logoRDC.jpg'),
-        right: await _loadImageAsBase64(inst.logo_url || '/static/dashboard/img/logoENF.png')
+        left: await _loadImageAsBase64(inst.logo_url || '/static/dashboard/img/logoENF.png'),
+        right: await _loadImageAsBase64(inst.logo_ministere_url || '/static/dashboard/img/logoMinFin.png')
     };
 
     const { jsPDF } = window.jspdf;
