@@ -624,8 +624,9 @@ async function exportCarrPresPDF(mois,wi,di){
     doc.autoTable({
         startY:sy,
         head:[PRES_HDR],body:rows,
-        styles:{fontSize:6,cellPadding:1.2,lineColor:[0,0,0],lineWidth:0.1,textColor:[0,0,0]},
-        headStyles:{fillColor:[16,185,129],textColor:[255,255,255]},
+        styles:{fontSize:6,cellPadding:1.2,lineColor:[0,0,0],lineWidth:0.1,textColor:[0,0,0],halign:'center'},
+        headStyles:{fillColor:[16,185,129],textColor:[255,255,255],halign:'center'},
+        columnStyles:{0:{halign:'left'}},
         margin:{left:M,right:M,top:sy,bottom:16},
         didDrawPage:function(d){
             drawFoot(doc,d.pageNumber);
@@ -639,18 +640,28 @@ async function exportCarrPresPDF(mois,wi,di){
     if(needNew){doc.addPage();fy=15;}else{fy+=8;}
 
     // ── LEFT SIDE: Nombre d'agents par état professionnel ──
+    // Source: même données `days` que la synthèse (droite) pour cohérence parfaite
     const leftX=M+5;
     let lyS=fy;
     doc.setFontSize(7.5);doc.setFont(undefined,'bold');doc.setTextColor(0);
     doc.text('Effectif par État Professionnel :',leftX,lyS);lyS+=5;
-    // Build état counts from available data
+    // Build état counts from the SAME days data as synthesis
     const etatCountMap={};
-    const etatMapLocal={};_etats.forEach(e=>{etatMapLocal[e.id_personnel]=e;});
-    _personnel.forEach(p=>{
-        const e=etatMapLocal[p.id_personnel];
-        const label=e?displayEtat(e.parametre):'Disponible';
-        if(!etatCountMap[label])etatCountMap[label]=0;
-        etatCountMap[label]++;
+    const seenAgents={};
+    days.forEach(day=>{
+        day.agents.forEach(a=>{
+            const key=a.id_personnel||a.agent;
+            if(seenAgents[key])return; // count each agent only once
+            seenAgents[key]=true;
+            if(a.non_disponible){
+                const motif=a.motif_indisponibilite||'Non disponible';
+                if(!etatCountMap[motif])etatCountMap[motif]=0;
+                etatCountMap[motif]++;
+            } else {
+                if(!etatCountMap['Disponible'])etatCountMap['Disponible']=0;
+                etatCountMap['Disponible']++;
+            }
+        });
     });
     doc.setFontSize(7);doc.setFont(undefined,'normal');
     Object.entries(etatCountMap).sort((a,b)=>b[1]-a[1]).forEach(([label,count])=>{

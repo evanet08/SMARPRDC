@@ -832,8 +832,9 @@ async function exportPersPDF(mois, wi, di) {
         startY: sy,
         head: [['Agent','Mat.ENF','Mat.FP','Grade','Genre','Arrivée','Départ','Mention','Justifié','Motif','H.Retard','H.Sup']],
         body: rows,
-        styles: { fontSize: 6, cellPadding: 1.2, lineColor: [0,0,0], lineWidth: 0.1, textColor: [0,0,0] },
-        headStyles: { fillColor: [16,185,129], textColor: [255,255,255] },
+        styles: { fontSize: 6, cellPadding: 1.2, lineColor: [0,0,0], lineWidth: 0.1, textColor: [0,0,0], halign: 'center' },
+        headStyles: { fillColor: [16,185,129], textColor: [255,255,255], halign: 'center' },
+        columnStyles: { 0: { halign: 'left' } },
         margin: { left: M, right: M, top: sy, bottom: 16 },
         didDrawPage: function(d) {
             drawFooter(doc, d.pageNumber);
