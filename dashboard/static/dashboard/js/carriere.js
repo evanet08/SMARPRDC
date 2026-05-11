@@ -406,6 +406,12 @@ function exportPDF(section){
     const hdr={global:HDR_GLOBAL,etats:HDR_ETATS,conges:HDR_CONGES}[section];
     const rows={global:_globalRows,etats:_etatsRows,conges:_congesRows}[section]();
     doc.autoTable({startY:25,head:[hdr],body:rows,styles:{fontSize:7,cellPadding:1.5},headStyles:{fillColor:[99,102,241]}});
+    // ── Timestamp (document content, above footer) ──
+    let _sfy=(doc.lastAutoTable?doc.lastAutoTable.finalY:180)+8;
+    const _sn=new Date();
+    doc.setFontSize(7);doc.setFont(undefined,'italic');doc.setTextColor(80);
+    doc.text('Générée par SMAPRDC le '+_sn.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g,'-')+' à '+_sn.toLocaleTimeString('fr-FR',{hour12:false}),doc.internal.pageSize.getWidth()/2,_sfy,{align:'center'});
+    doc.setTextColor(0);
     doc.save('SMAPRDC_'+section+'_'+new Date().toISOString().slice(0,10)+'.pdf');
 }
 function exportExcel(section){
@@ -726,6 +732,14 @@ async function exportCarrPresPDF(mois,wi,di){
 
     if(needNew)drawFoot(doc,doc.internal.getNumberOfPages());
 
+    // ── Timestamp (document content, above footer) ──
+    fy+=10;
+    if(fy+8>pageH-16){doc.addPage();fy=15;drawFoot(doc,doc.internal.getNumberOfPages());}
+    const _cpn=new Date();
+    doc.setFontSize(7);doc.setFont(undefined,'italic');doc.setTextColor(80);
+    doc.text('Générée par SMAPRDC le '+_cpn.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g,'-')+' à '+_cpn.toLocaleTimeString('fr-FR',{hour12:false}),pageW/2,fy,{align:'center'});
+    doc.setTextColor(0);
+
     doc.save('Presences_'+label.replace(/[^a-zA-Z0-9]/g,'_')+'.pdf');
 }
 function exportCarrPresXls(mois,wi,di){
@@ -890,6 +904,13 @@ async function exportCumulsCarrPDF(){
     doc.autoTable({html:tbl,startY:startY,styles:{fontSize:6,cellPadding:1.2,lineColor:[0,0,0],lineWidth:0.1,textColor:[0,0,0]},headStyles:{fillColor:[245,158,11]},margin:{left:M,right:M,top:startY,bottom:10},
         didDrawPage:function(data){doc.setFontSize(5.5);doc.setFont(undefined,'normal');doc.setTextColor(100);doc.text('SMAPRDC — Cumuls',M+2,pageH-4);doc.text('Page '+data.pageNumber,pageW-M-2,pageH-4,{align:'right'});doc.setTextColor(0);if(data.pageNumber===1)data.settings.margin.top=10;}
     });
+    // ── Timestamp (document content, above footer) ──
+    let _ccfy=(doc.lastAutoTable?doc.lastAutoTable.finalY:180)+8;
+    if(_ccfy+8>pageH-10){doc.addPage();_ccfy=15;}
+    const _ccn=new Date();
+    doc.setFontSize(7);doc.setFont(undefined,'italic');doc.setTextColor(80);
+    doc.text('Générée par SMAPRDC le '+_ccn.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g,'-')+' à '+_ccn.toLocaleTimeString('fr-FR',{hour12:false}),pageW/2,_ccfy,{align:'center'});
+    doc.setTextColor(0);
     doc.save('SMAPRDC_Cumuls_'+new Date().toISOString().slice(0,10)+'.pdf');
 }
 function exportCumulsCarrXls(){

@@ -662,7 +662,7 @@ def carriere_liste_declarative(request):
                p.genre,
                p.date_naissance,
                p.province_origine,
-               IFNULL(gr.sigle,'—') AS niveau_etudes,
+               IFNULL(dl.sigle,'—') AS niveau_etudes,
                IFNULL(sp.specialite,'—') AS domaine_etudes,
                p.matriculeFP,
                p.date_engagement,
@@ -673,7 +673,7 @@ def carriere_liste_declarative(request):
                p.etablissement,
                IFNULL(epp.parametre, 'En fonction') AS etat_professionnel
         FROM personnel p
-        LEFT JOIN personnel_grade gr ON gr.id_grade = p.id_grade
+        LEFT JOIN personnel_diplome dl ON dl.id_diplome = p.id_diplome
         LEFT JOIN personnel_specialite sp ON sp.id_specialite = p.id_specialite
         LEFT JOIN personnel_grade_administratif ga ON ga.id_grade_administratif = p.id_grade_administratif
         LEFT JOIN personnel_etatprofessionnel ep ON ep.id_personnel = p.id_personnel

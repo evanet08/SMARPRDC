@@ -740,6 +740,12 @@ function exportApprPDF(ci, coi, si) {
     else label = 'Toutes classes';
     const { doc, now } = _pdfDoc('Présences Apprenants — ' + label);
     doc.autoTable({ startY: 25, head: [['Classe','Cours','Date','Début','Fin','Présents','Absents','Attendus','Taux']], body: rows, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [99,102,241] } });
+    // ── Timestamp (document content, above footer) ──
+    let _afy = doc.lastAutoTable.finalY || 180; _afy += 8;
+    const _an = new Date();
+    doc.setFontSize(7); doc.setFont(undefined, 'italic'); doc.setTextColor(80);
+    doc.text('Générée par SMAPRDC le ' + _an.toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g, '-') + ' à ' + _an.toLocaleTimeString('fr-FR', {hour12:false}), doc.internal.pageSize.getWidth() / 2, _afy, { align: 'center' });
+    doc.setTextColor(0);
     doc.save('Apprenants_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf');
 }
 function exportApprXls(ci, coi, si) {
@@ -971,6 +977,12 @@ async function exportGlobalPDF() {
         doc.setFontSize(12); doc.text('Cumuls Heures Supplémentaires', 14, 15);
         doc.autoTable({ html: tbl, startY: 20, styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [245,158,11] } });
     }
+    // ── Timestamp (document content, above footer) ──
+    let _gfy = (doc.lastAutoTable ? doc.lastAutoTable.finalY : 180) + 8;
+    const _gn = new Date();
+    doc.setFontSize(7); doc.setFont(undefined, 'italic'); doc.setTextColor(80);
+    doc.text('Générée par SMAPRDC le ' + _gn.toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g, '-') + ' à ' + _gn.toLocaleTimeString('fr-FR', {hour12:false}), doc.internal.pageSize.getWidth() / 2, _gfy, { align: 'center' });
+    doc.setTextColor(0);
     doc.save('SMAPRDC_Presences_' + now.replace(/\//g, '-') + '.pdf');
 }
 
