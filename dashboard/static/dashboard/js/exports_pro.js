@@ -195,14 +195,12 @@ function _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW) {
 
 function _drawPdfFooter(doc, inst, pageW, pageH) {
     const y = pageH - 4;
+    const now = new Date();
+    const dateFr = now.toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g, '-');
+    const timeFr = now.toLocaleTimeString('fr-FR', {hour12:false});
     doc.setFontSize(5.5); doc.setFont(undefined, 'normal'); doc.setTextColor(100);
-    doc.text('LMDSoft', 6, y);
-    doc.setTextColor(255, 0, 0);
-    doc.text('Email : ' + (inst.email || 'info@enf-rdc.cd'), 30, y);
-    doc.setTextColor(100);
-    doc.text('Tél : ' + (inst.telephone || ''), pageW / 2, y, { align: 'center' });
-    doc.text('Site : ' + (inst.site || 'enf-rdc.cd'), pageW - 35, y);
-    doc.text('LMDSoft', pageW - 6, y, { align: 'right' });
+    doc.text('Générée par SMAPRDC le ' + dateFr + ' à ' + timeFr, 6, y);
+    doc.text('Page ' + (doc.internal.getCurrentPageInfo().pageNumber || ''), pageW - 6, y, { align: 'right' });
     doc.setTextColor(0);
 }
 

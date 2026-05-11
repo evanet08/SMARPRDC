@@ -815,16 +815,15 @@ async function exportPersPDF(mois, wi, di) {
         // Border-top line
         d.setDrawColor(0); d.setLineWidth(0.5);
         d.line(M, footY - 3, pageW - M, footY - 3);
-        // Left: institution text
+        // Left: SMAPRDC generation timestamp
+        const now = new Date();
+        const dateFr = now.toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g, '-');
+        const timeFr = now.toLocaleTimeString('fr-FR', {hour12:false});
         d.setFontSize(6.5); d.setFont(undefined, 'bold'); d.setTextColor(30);
-        d.text('Générées conjointement par SMAPRDC et LMDSoft, propulsées par NEXORA TECH', M, footY);
-        // Center: page number
+        d.text('Générée par SMAPRDC le ' + dateFr + ' à ' + timeFr, M, footY);
+        // Right: page number
         d.setFontSize(6.5); d.setFont(undefined, 'bold'); d.setTextColor(80);
-        d.text('Page ' + pgNum, pageW / 2, footY, { align: 'center' });
-        // Right: contact info
-        d.setFontSize(6.5); d.setFont(undefined, 'bold'); d.setTextColor(37, 99, 235);
-        const rightText = 'info@enf-rdc.cd  |  (+243) 994 034 954  |  enf-rdc.cd';
-        d.text(rightText, pageW - M, footY, { align: 'right' });
+        d.text('Page ' + pgNum, pageW - M, footY, { align: 'right' });
         d.setTextColor(0);
     }
 
@@ -915,7 +914,7 @@ async function exportCumulsPDF() {
     if (!tbl) return;
     const { doc, startY, drawHeader, pageW, pageH, M } = await _pdfDocInst('Cumuls Heures Supplémentaires');
     doc.autoTable({ html: tbl, startY: startY, styles: { fontSize: 7, cellPadding: 1.5, lineColor: [0,0,0], lineWidth: 0.1, textColor: [0,0,0] }, headStyles: { fillColor: [245,158,11] }, margin: { left: M, right: M, top: startY, bottom: 10 },
-        didDrawPage: function(data) { doc.setFontSize(5.5); doc.setFont(undefined, 'normal'); doc.setTextColor(100); doc.text('SMAPRDC — Cumuls', M+2, pageH-4); doc.text('Page '+data.pageNumber, pageW-M-2, pageH-4, {align:'right'}); doc.setTextColor(0); if (data.pageNumber === 1) data.settings.margin.top = 10; }
+        didDrawPage: function(data) { const _n = new Date(); const _d = _n.toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g, '-'); const _t = _n.toLocaleTimeString('fr-FR', {hour12:false}); doc.setFontSize(5.5); doc.setFont(undefined, 'normal'); doc.setTextColor(100); doc.text('Générée par SMAPRDC le ' + _d + ' à ' + _t, M+2, pageH-4); doc.text('Page '+data.pageNumber, pageW-M-2, pageH-4, {align:'right'}); doc.setTextColor(0); if (data.pageNumber === 1) data.settings.margin.top = 10; }
     });
     doc.save('Cumuls_Heures_Supp.pdf');
 }

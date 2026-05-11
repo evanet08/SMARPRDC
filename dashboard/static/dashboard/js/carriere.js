@@ -76,11 +76,26 @@ function heroCard(cls,label,value,sub,icon) {
 function renderHero() {
     const total=_personnel.length, etatMap={};
     _etats.forEach(e=>{etatMap[e.id_personnel]=e;});
-    let enFx=0,enConge=0,other=0;
-    _personnel.forEach(p=>{const e=etatMap[p.id_personnel];if(!e||e.sigle==='EnFx')enFx++;else if(['EnCA','EnCC','EnCM'].includes(e.sigle))enConge++;else other++;});
+    // Compute "Disponible" using same logic as presence synthesis:
+    // Available = no non-EnFx état AND no active congé covering today
+    const today = new Date(); today.setHours(0,0,0,0);
+    let disponible = 0;
+    _personnel.forEach(p => {
+        const e = etatMap[p.id_personnel];
+        // Non-EnFx état → not available
+        if (e && e.sigle !== 'EnFx') return;
+        // Check active congés for today
+        const hasCongo = _conges.some(c => {
+            if (c.id_personnel !== p.id_personnel) return false;
+            const sd = new Date(c.startdate); sd.setHours(0,0,0,0);
+            const ed = new Date(c.enddate); ed.setHours(0,0,0,0);
+            return sd <= today && today <= ed;
+        });
+        if (!hasCongo) disponible++;
+    });
     document.getElementById('hero-summary').innerHTML=
         heroCard('c1','Personnel Total',fmt(total),'Administratif en fonction','👥')+
-        heroCard('c7','Disponible',fmt(enFx),`${total?((enFx/total)*100).toFixed(1):0}%`,'✅');
+        heroCard('c7','Disponible',fmt(disponible),`${total?((disponible/total)*100).toFixed(1):0}%`,'✅');
 }
 
 // ═══ TAB 1: VUE GLOBALE ══════════════════════════════════════════════════════
@@ -1017,6 +1032,7 @@ function renderDeclarative() {
             <td style="font-size:.68rem">${D(p.acte_nomination)}</td>
             <td style="font-weight:600;color:var(--accent-indigo);font-size:.7rem">${age}</td>
             <td style="font-weight:600;color:var(--accent-emerald);font-size:.7rem">${anc}</td>
+            <td style="font-size:.7rem">${displayEtat(D(p.etat_professionnel))}</td>
         </tr>`;
     });
     document.getElementById('tbody-declarative').innerHTML = html;
@@ -1039,7 +1055,7 @@ function filterDeclarative() {
 const _DECL_HDR = ['#', 'Mat.', 'Nom & Post Nom', 'Sexe', 'Dt Naiss.',
     'Prov. Orig.', 'Niv. Ét.', 'Dom. Ét.', 'Étab. Ét.',
     'Mat. FP', 'Dt Adm. Stat.', 'Gr. Stat',
-    'Réf. Acte Jur.', 'Fonction', 'Acte Nom.', 'Âge', 'Anc.'];
+    'Réf. Acte Jur.', 'Fonction', 'Acte Nom.', 'Âge', 'Anc.', 'État Prof.'];
 
 function _declRows() {
     return _listeDeclarative.map((p, i) => [
@@ -1047,7 +1063,8 @@ function _declRows() {
         D(p.province_origine), D(p.niveau_etudes), D(p.domaine_etudes), D(p.etablissement),
         D(p.matriculeFP), D(p.date_engagement), D(p.grade_stat),
         D(p.ref_acte_engagement), D(p.fonction), D(p.acte_nomination),
-        _calcAge(p.date_naissance), _calcAnciennete(p.date_engagement)
+        _calcAge(p.date_naissance), _calcAnciennete(p.date_engagement),
+        displayEtat(D(p.etat_professionnel))
     ]);
 }
 
@@ -1145,13 +1162,17 @@ async function exportDeclarativePDF() {
             12: { cellWidth: 'auto' },
             13: { cellWidth: 'auto' },
             14: { cellWidth: 'auto', halign: 'center' },
-            15: { cellWidth: 'auto', halign: 'center' }
+            15: { cellWidth: 'auto', halign: 'center' },
+            16: { cellWidth: 'auto', halign: 'center' },
+            17: { cellWidth: 'auto' }
         },
         margin: { left: _DECL_MARGIN, right: _DECL_MARGIN, top: startY, bottom: 10 },
         didDrawPage: function (data) {
-            // Footer only — header is NOT repeated on subsequent pages
+            // Footer
             doc.setFontSize(5.5); doc.setFont(undefined, 'normal'); doc.setTextColor(100);
-            doc.text('SMAPRDC — Liste Déclarative', _DECL_MARGIN + 2, pageH - 4);
+            const now = new Date();
+            const footerTxt = 'Générée par SMAPRDC le ' + now.toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g, '-') + ' à ' + now.toLocaleTimeString('fr-FR', {hour12:false});
+            doc.text(footerTxt, _DECL_MARGIN + 2, pageH - 4);
             doc.text('Page ' + data.pageNumber, pageW - _DECL_MARGIN - 2, pageH - 4, { align: 'right' });
             doc.setTextColor(0);
             // Set top margin for subsequent pages (no header)
@@ -1167,7 +1188,7 @@ function exportDeclarativeExcel() {
     // Institutional header
     _DECL_HEADER_LINES.forEach(line => rows.push([line]));
     rows.push([]);
-    rows.push(['Générée le ' + new Date().toLocaleDateString('fr-FR')]);
+    rows.push(['Générée par SMAPRDC le ' + new Date().toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g, '-') + ' à ' + new Date().toLocaleTimeString('fr-FR', {hour12:false})]);
     rows.push([]);
     rows.push(_DECL_HDR);
     _declRows().forEach(r => rows.push(r));
@@ -1177,7 +1198,7 @@ function exportDeclarativeExcel() {
     ws['!cols'] = [
         { wch: 5 }, { wch: 12 }, { wch: 35 }, { wch: 6 }, { wch: 14 },
         { wch: 18 }, { wch: 10 }, { wch: 28 }, { wch: 22 }, { wch: 14 }, { wch: 16 },
-        { wch: 10 }, { wch: 20 }, { wch: 22 }, { wch: 22 }, { wch: 10 }, { wch: 14 }
+        { wch: 10 }, { wch: 20 }, { wch: 22 }, { wch: 22 }, { wch: 10 }, { wch: 14 }, { wch: 20 }
     ];
     XLSX.utils.book_append_sheet(wb, ws, 'Liste Déclarative');
     XLSX.writeFile(wb, 'SMAPRDC_Liste_Declarative_' + new Date().toISOString().slice(0, 10) + '.xlsx');
@@ -1200,7 +1221,7 @@ const _COL_LABELS = {
     domaine: 'Domaine', parametre: 'Paramètre', grade: 'Grade',
     service: 'Service', specialite: 'Spécialité', type: 'Type',
     vacation: 'Vacation', profession: 'Profession', id_secteur: 'ID Secteur',
-    congetype: 'Type de Congé'
+    congetype: 'Type si c\'est un Congé'
 };
 let _congeTypesCache = []; // [{id_congetype, congename, ...}]
 

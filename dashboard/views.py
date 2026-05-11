@@ -670,11 +670,14 @@ def carriere_liste_declarative(request):
                p.fonction,
                p.acte_nomination,
                p.ref_acte_engagement,
-               p.etablissement
+               p.etablissement,
+               IFNULL(epp.parametre, 'En fonction') AS etat_professionnel
         FROM personnel p
         LEFT JOIN personnel_grade gr ON gr.id_grade = p.id_grade
         LEFT JOIN personnel_specialite sp ON sp.id_specialite = p.id_specialite
         LEFT JOIN personnel_grade_administratif ga ON ga.id_grade_administratif = p.id_grade_administratif
+        LEFT JOIN personnel_etatprofessionnel ep ON ep.id_personnel = p.id_personnel
+        LEFT JOIN personnel_etatprofessionnel_parametes epp ON epp.id_parametre = ep.id_parametre
         WHERE p.isAdministratif = 1 AND p.en_fonction = 1 AND p.id_personnel != 1
         ORDER BY p.nom, p.postnom
     """
@@ -940,15 +943,14 @@ def institution_info(request):
 _PARAMS_TABLES = {
     'personnel_categorie':                  {'pk': 'id_categorie',       'cols': ['categorie', 'sigle'],            'label': 'Catégories'},
     'personnel_conge_types':                {'pk': 'id_congetype',       'cols': ['congename', 'nbrePredefini', 'totalJours'], 'label': 'Types de Congé'},
-    'personnel_diplome':                    {'pk': 'id_diplome',         'cols': ['diplome', 'sigle'],              'label': 'Diplômes'},
-    'personnel_domaine':                    {'pk': 'id_domaine',         'cols': ['domaine', 'sigle'],              'label': 'Domaines'},
+    'personnel_diplome':                    {'pk': 'id_diplome',         'cols': ['diplome', 'sigle'],              'label': 'Niveau d\'Études'},
     'personnel_etatprofessionnel_parametes': {'pk': 'id_parametre',       'cols': ['parametre', 'sigle', 'congetype'], 'label': 'États Professionnels'},
-    'personnel_grade':                      {'pk': 'id_grade',           'cols': ['grade', 'sigle'],                'label': 'Grades'},
-    'personnel_service':                    {'pk': 'id_service',         'cols': ['service'],                       'label': 'Services'},
-    'personnel_specialite':                 {'pk': 'id_specialite',      'cols': ['specialite', 'sigle'],           'label': 'Spécialités'},
+    'personnel_grade':                      {'pk': 'id_grade',           'cols': ['grade', 'sigle'],                'label': 'Grades Académiques'},
+    'personnel_service':                    {'pk': 'id_service',         'cols': ['service'],                       'label': 'Types de Services'},
+    'personnel_specialite':                 {'pk': 'id_specialite',      'cols': ['specialite', 'sigle'],           'label': 'Domaine de Formation'},
     'personnel_type':                       {'pk': 'id_personnel_type',  'cols': ['type', 'sigle'],                 'label': 'Types de Personnel'},
-    'personnel_vacation':                   {'pk': 'id_vacation',        'cols': ['vacation', 'sigle'],             'label': 'Vacations'},
-    'professions':                          {'pk': 'id_profession',      'cols': ['profession'],                    'label': 'Professions'},
+    'personnel_vacation':                   {'pk': 'id_vacation',        'cols': ['vacation', 'sigle'],             'label': 'Types de Vacation'},
+    'professions':                          {'pk': 'id_profession',      'cols': ['profession'],                    'label': 'Types de Professions'},
 }
 
 
