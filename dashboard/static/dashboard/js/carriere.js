@@ -1168,17 +1168,27 @@ async function exportDeclarativePDF() {
         },
         margin: { left: _DECL_MARGIN, right: _DECL_MARGIN, top: startY, bottom: 10 },
         didDrawPage: function (data) {
-            // Footer
+            // Footer (system zone — unchanged)
             doc.setFontSize(5.5); doc.setFont(undefined, 'normal'); doc.setTextColor(100);
-            const now = new Date();
-            const footerTxt = 'Générée par SMAPRDC le ' + now.toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g, '-') + ' à ' + now.toLocaleTimeString('fr-FR', {hour12:false});
-            doc.text(footerTxt, _DECL_MARGIN + 2, pageH - 4);
+            doc.text('SMAPRDC — Liste Déclarative', _DECL_MARGIN + 2, pageH - 4);
             doc.text('Page ' + data.pageNumber, pageW - _DECL_MARGIN - 2, pageH - 4, { align: 'right' });
             doc.setTextColor(0);
             // Set top margin for subsequent pages (no header)
             if (data.pageNumber === 1) data.settings.margin.top = 10;
         }
     });
+
+    // ── Timestamp (document content, above footer) ──
+    let _dlfy = doc.lastAutoTable.finalY || (pageH - 30);
+    _dlfy += 8;
+    if (_dlfy + 8 > pageH - 10) { doc.addPage(); _dlfy = 15; }
+    const _dln = new Date();
+    const _dld = _dln.toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g, '-');
+    const _dlt = _dln.toLocaleTimeString('fr-FR', {hour12:false});
+    doc.setFontSize(7); doc.setFont(undefined, 'italic'); doc.setTextColor(80);
+    doc.text('Générée par SMAPRDC le ' + _dld + ' à ' + _dlt, pageW / 2, _dlfy, { align: 'center' });
+    doc.setTextColor(0);
+
     doc.save('SMAPRDC_Liste_Declarative_' + new Date().toISOString().slice(0, 10) + '.pdf');
 }
 

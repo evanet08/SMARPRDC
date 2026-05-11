@@ -195,12 +195,14 @@ function _drawPdfHeader(doc, inst, logos, periodLabel, nbJours, pageW) {
 
 function _drawPdfFooter(doc, inst, pageW, pageH) {
     const y = pageH - 4;
-    const now = new Date();
-    const dateFr = now.toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g, '-');
-    const timeFr = now.toLocaleTimeString('fr-FR', {hour12:false});
     doc.setFontSize(5.5); doc.setFont(undefined, 'normal'); doc.setTextColor(100);
-    doc.text('Générée par SMAPRDC le ' + dateFr + ' à ' + timeFr, 6, y);
-    doc.text('Page ' + (doc.internal.getCurrentPageInfo().pageNumber || ''), pageW - 6, y, { align: 'right' });
+    doc.text('LMDSoft', 6, y);
+    doc.setTextColor(255, 0, 0);
+    doc.text('Email : ' + (inst.email || 'info@enf-rdc.cd'), 30, y);
+    doc.setTextColor(100);
+    doc.text('Tél : ' + (inst.telephone || ''), pageW / 2, y, { align: 'center' });
+    doc.text('Site : ' + (inst.site || 'enf-rdc.cd'), pageW - 35, y);
+    doc.text('LMDSoft', pageW - 6, y, { align: 'right' });
     doc.setTextColor(0);
 }
 
@@ -461,9 +463,20 @@ async function exportPresProPDF(days, label, filename) {
         doc.addPage();
         _drawSignatures(doc, pageW, 15);
         _drawPdfFooter(doc, inst, pageW, pageH);
+        finalY = 15 + 28;
     } else {
         _drawSignatures(doc, pageW, finalY);
+        finalY += 28;
     }
+
+    // ── Timestamp (document content, above footer) ──
+    if (finalY + 8 > pageH - 15) { doc.addPage(); finalY = 15; _drawPdfFooter(doc, inst, pageW, pageH); }
+    const _now = new Date();
+    const _dateFr = _now.toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g, '-');
+    const _timeFr = _now.toLocaleTimeString('fr-FR', {hour12:false});
+    doc.setFontSize(7); doc.setFont(undefined, 'italic'); doc.setTextColor(80);
+    doc.text('Générée par SMAPRDC le ' + _dateFr + ' à ' + _timeFr, pageW / 2, finalY, { align: 'center' });
+    doc.setTextColor(0);
 
     doc.save(filename + '.pdf');
 }

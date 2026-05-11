@@ -815,15 +815,16 @@ async function exportPersPDF(mois, wi, di) {
         // Border-top line
         d.setDrawColor(0); d.setLineWidth(0.5);
         d.line(M, footY - 3, pageW - M, footY - 3);
-        // Left: SMAPRDC generation timestamp
-        const now = new Date();
-        const dateFr = now.toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g, '-');
-        const timeFr = now.toLocaleTimeString('fr-FR', {hour12:false});
+        // Left: institution text
         d.setFontSize(6.5); d.setFont(undefined, 'bold'); d.setTextColor(30);
-        d.text('Générée par SMAPRDC le ' + dateFr + ' à ' + timeFr, M, footY);
-        // Right: page number
+        d.text('Générées conjointement par SMAPRDC et LMDSoft, propulsées par NEXORA TECH', M, footY);
+        // Center: page number
         d.setFontSize(6.5); d.setFont(undefined, 'bold'); d.setTextColor(80);
-        d.text('Page ' + pgNum, pageW - M, footY, { align: 'right' });
+        d.text('Page ' + pgNum, pageW / 2, footY, { align: 'center' });
+        // Right: contact info
+        d.setFontSize(6.5); d.setFont(undefined, 'bold'); d.setTextColor(37, 99, 235);
+        const rightText = 'info@enf-rdc.cd  |  (+243) 994 034 954  |  enf-rdc.cd';
+        d.text(rightText, pageW - M, footY, { align: 'right' });
         d.setTextColor(0);
     }
 
@@ -893,6 +894,16 @@ async function exportPersPDF(mois, wi, di) {
     // Draw footer on the synthesis page if new page was added
     if (needNewPage) drawFooter(doc, doc.internal.getNumberOfPages());
 
+    // ── Timestamp (document content, above footer) ──
+    fy += 10;
+    if (fy + 8 > pageH - 16) { doc.addPage(); fy = 15; drawFooter(doc, doc.internal.getNumberOfPages()); }
+    const _now = new Date();
+    const _dateFr = _now.toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g, '-');
+    const _timeFr = _now.toLocaleTimeString('fr-FR', {hour12:false});
+    doc.setFontSize(7); doc.setFont(undefined, 'italic'); doc.setTextColor(80);
+    doc.text('Générée par SMAPRDC le ' + _dateFr + ' à ' + _timeFr, pageW / 2, fy, { align: 'center' });
+    doc.setTextColor(0);
+
     doc.save('Personnel_' + label.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf');
 }
 function exportPersXls(mois, wi, di) {
@@ -914,8 +925,18 @@ async function exportCumulsPDF() {
     if (!tbl) return;
     const { doc, startY, drawHeader, pageW, pageH, M } = await _pdfDocInst('Cumuls Heures Supplémentaires');
     doc.autoTable({ html: tbl, startY: startY, styles: { fontSize: 7, cellPadding: 1.5, lineColor: [0,0,0], lineWidth: 0.1, textColor: [0,0,0] }, headStyles: { fillColor: [245,158,11] }, margin: { left: M, right: M, top: startY, bottom: 10 },
-        didDrawPage: function(data) { const _n = new Date(); const _d = _n.toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g, '-'); const _t = _n.toLocaleTimeString('fr-FR', {hour12:false}); doc.setFontSize(5.5); doc.setFont(undefined, 'normal'); doc.setTextColor(100); doc.text('Générée par SMAPRDC le ' + _d + ' à ' + _t, M+2, pageH-4); doc.text('Page '+data.pageNumber, pageW-M-2, pageH-4, {align:'right'}); doc.setTextColor(0); if (data.pageNumber === 1) data.settings.margin.top = 10; }
+        didDrawPage: function(data) { doc.setFontSize(5.5); doc.setFont(undefined, 'normal'); doc.setTextColor(100); doc.text('SMAPRDC — Cumuls', M+2, pageH-4); doc.text('Page '+data.pageNumber, pageW-M-2, pageH-4, {align:'right'}); doc.setTextColor(0); if (data.pageNumber === 1) data.settings.margin.top = 10; }
     });
+    // ── Timestamp (document content, above footer) ──
+    let _cfy = doc.lastAutoTable.finalY || (pageH - 30);
+    _cfy += 8;
+    if (_cfy + 8 > pageH - 10) { doc.addPage(); _cfy = 15; }
+    const _cn = new Date();
+    const _cd = _cn.toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g, '-');
+    const _ct = _cn.toLocaleTimeString('fr-FR', {hour12:false});
+    doc.setFontSize(7); doc.setFont(undefined, 'italic'); doc.setTextColor(80);
+    doc.text('Générée par SMAPRDC le ' + _cd + ' à ' + _ct, pageW / 2, _cfy, { align: 'center' });
+    doc.setTextColor(0);
     doc.save('Cumuls_Heures_Supp.pdf');
 }
 function exportCumulsXls() {
