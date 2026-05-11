@@ -1199,16 +1199,22 @@ const _COL_LABELS = {
     nbrePredefini: 'Prédéfini', totalJours: 'Total jours', diplome: 'Diplôme',
     domaine: 'Domaine', parametre: 'Paramètre', grade: 'Grade',
     service: 'Service', specialite: 'Spécialité', type: 'Type',
-    vacation: 'Vacation', profession: 'Profession', id_secteur: 'ID Secteur'
+    vacation: 'Vacation', profession: 'Profession', id_secteur: 'ID Secteur',
+    congetype: 'Type de Congé'
 };
+let _congeTypesCache = []; // [{id_congetype, congename, ...}]
 
 function _colLabel(col) { return _COL_LABELS[col] || col.charAt(0).toUpperCase() + col.slice(1); }
 
 async function loadParamsTab() {
     if (_paramsTabLoaded) return;
     try {
-        const res = await fetch(API + '/params/tables');
-        _paramsTables = await res.json();
+        const [tablesRes, ctRes] = await Promise.all([
+            fetch(API + '/params/tables'),
+            fetch(API + '/conge-types')
+        ]);
+        _paramsTables = await tablesRes.json();
+        _congeTypesCache = await ctRes.json();
         _renderParamsSidebar();
         _paramsTabLoaded = true;
     } catch (e) {
@@ -1292,6 +1298,15 @@ function _renderParamsTable() {
                 let val = row[c];
                 // Boolean display
                 if (c === 'nbrePredefini') val = val ? '✓ Oui' : '✗ Non';
+                // Resolve congetype to name
+                if (c === 'congetype') {
+                    if (val != null) {
+                        const ct = _congeTypesCache.find(t => t.id_congetype === val);
+                        val = ct ? ct.congename : val;
+                    } else {
+                        val = '—';
+                    }
+                }
                 return `<td>${val != null ? val : '—'}</td>`;
             }).join('') +
             `<td style="text-align:center">
@@ -1321,6 +1336,15 @@ function openParamForm(editRow) {
                 inputHtml = `<select class="form-control" id="pf-${c}">
                     <option value="0" ${!val ? 'selected' : ''}>Non</option>
                     <option value="1" ${val ? 'selected' : ''}>Oui</option>
+                </select>`;
+            } else if (c === 'congetype') {
+                // Dropdown of conge_types with NULL option
+                const opts = _congeTypesCache.map(ct =>
+                    `<option value="${ct.id_congetype}" ${val == ct.id_congetype ? 'selected' : ''}>${ct.congename}</option>`
+                ).join('');
+                inputHtml = `<select class="form-control" id="pf-${c}">
+                    <option value="" ${!val ? 'selected' : ''}>— Aucun (pas un congé)</option>
+                    ${opts}
                 </select>`;
             } else if (c === 'totalJours' || c === 'id_secteur') {
                 inputHtml = `<input type="number" class="form-control" id="pf-${c}" value="${val}" min="0" placeholder="—">`;
@@ -1354,6 +1378,8 @@ async function saveParam() {
         if (!el) return;
         let val = el.value;
         if (c === 'nbrePredefini' || c === 'totalJours' || c === 'id_secteur') val = parseInt(val) || 0;
+        // congetype: empty string → null (not a congé)
+        if (c === 'congetype') val = val === '' ? null : parseInt(val);
         data[c] = val;
     });
 

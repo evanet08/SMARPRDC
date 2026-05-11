@@ -294,33 +294,48 @@ def presence_personnel_detail(request):
         # Personnel with a non-EnFx état are UNAVAILABLE on ALL dates.
         # 'EnFx' (sigle) means "En fonction" = available.
         # Personnel WITHOUT any état record are considered "En fonction" (available).
+        # congetype IS NOT NULL → this état IS a congé type.
         cursor.execute("""
-            SELECT ep.id_personnel, pr.sigle, pr.parametre
+            SELECT ep.id_personnel, pr.sigle, pr.parametre, pr.congetype
             FROM personnel_etatprofessionnel ep
             JOIN personnel_etatprofessionnel_parametes pr ON pr.id_parametre = ep.id_parametre
             JOIN personnel p ON p.id_personnel = ep.id_personnel
             WHERE p.isAdministratif = 1 AND p.en_fonction = 1 AND p.id_personnel != 1
         """)
         etat_rows = _dictfetchall(cursor)
-        # Map: id_personnel → {sigle, parametre}
+        # Map: id_personnel → {sigle, parametre, congetype}
         etat_map = {}
         for er in etat_rows:
-            etat_map[er['id_personnel']] = {'sigle': er['sigle'], 'parametre': er['parametre']}
+            etat_map[er['id_personnel']] = {
+                'sigle': er['sigle'], 'parametre': er['parametre'],
+                'congetype': er['congetype']  # NOT NULL = is a congé
+            }
+
+        # ── CONGÉ-TYPE PARAMÈTRE LOOKUP ──────────────────────────────────
+        # Map: id_congetype → parametre name from personnel_etatprofessionnel_parametes
+        # This ensures congé labels come from the SINGLE canonical source.
+        cursor.execute("""
+            SELECT congetype, parametre, sigle
+            FROM personnel_etatprofessionnel_parametes
+            WHERE congetype IS NOT NULL
+        """)
+        congetype_param_map = {}
+        for row in cursor.fetchall():
+            congetype_param_map[row[0]] = {'parametre': row[1], 'sigle': row[2]}
 
         # ── AVAILABILITY DATA: Active congés for this month ──────────────
         # A congé covers a date range [startdate, enddate].
         # Any personnel on congé for a given date is UNAVAILABLE on that date.
+        # The label is resolved via personnel_etatprofessionnel_parametes (canonical source).
         cursor.execute("""
-            SELECT pc.id_personnel, pc.startdate, pc.enddate,
-                   IFNULL(ct.congename, 'En congé') AS congename
+            SELECT pc.id_personnel, pc.startdate, pc.enddate, pc.id_congetype
             FROM personnel_conges pc
             JOIN personnel p ON p.id_personnel = pc.id_personnel
-            LEFT JOIN personnel_conge_types ct ON ct.id_congetype = pc.id_congetype
             WHERE p.isAdministratif = 1 AND p.en_fonction = 1 AND p.id_personnel != 1
               AND pc.enddate >= %s AND pc.startdate <= %s
         """, [month_start_str, month_end_str])
         conge_rows = _dictfetchall(cursor)
-        # Build lookup: id_personnel → list of (startdate, enddate, congename) ranges
+        # Build lookup: id_personnel → list of (startdate, enddate, parametre, sigle)
         conge_map = {}
         for cr in conge_rows:
             pid = cr['id_personnel']
@@ -328,7 +343,11 @@ def presence_personnel_detail(request):
                 conge_map[pid] = []
             sd = cr['startdate'] if isinstance(cr['startdate'], date) else date.fromisoformat(str(cr['startdate']))
             ed = cr['enddate'] if isinstance(cr['enddate'], date) else date.fromisoformat(str(cr['enddate']))
-            conge_map[pid].append((sd, ed, cr['congename']))
+            # Resolve label from paramètres via congetype
+            ct_info = congetype_param_map.get(cr['id_congetype'], {})
+            label = ct_info.get('parametre', 'En congé')
+            sigle = ct_info.get('sigle', 'Cg')
+            conge_map[pid].append((sd, ed, label, sigle))
 
         cursor.execute("""
             SELECT pp.id_personnel,
@@ -379,10 +398,11 @@ def presence_personnel_detail(request):
         return str(t)
 
     def _is_on_conge(pid, dt):
-        """Check if a personnel has an active congé on a given date. Returns congé type name or None."""
-        for sd, ed, cname in conge_map.get(pid, []):
+        """Check if a personnel has an active congé on a given date.
+        Returns (parametre, sigle) from personnel_etatprofessionnel_parametes or None."""
+        for sd, ed, label, sigle in conge_map.get(pid, []):
             if sd <= dt <= ed:
-                return cname
+                return {'parametre': label, 'sigle': sigle}
         return None
 
     def _has_non_enfx_etat(pid):
@@ -438,10 +458,10 @@ def presence_personnel_detail(request):
                 unavail_reason = non_enfx['parametre']
                 unavail_sigle = non_enfx['sigle']
             else:
-                conge_name = _is_on_conge(aid, jour_dt)
-                if conge_name:
-                    unavail_reason = conge_name
-                    unavail_sigle = 'Cg'
+                conge_info = _is_on_conge(aid, jour_dt)
+                if conge_info:
+                    unavail_reason = conge_info['parametre']
+                    unavail_sigle = conge_info['sigle']
 
             if unavail_reason:
                 # Person is NOT AVAILABLE on this date:
@@ -598,8 +618,8 @@ def carriere_etats(request):
 
 @api_view(['GET'])
 def carriere_parametres(request):
-    """List all professional state parameters."""
-    sql = "SELECT id_parametre, parametre, sigle FROM personnel_etatprofessionnel_parametes ORDER BY id_parametre"
+    """List all professional state parameters (including congetype link)."""
+    sql = "SELECT id_parametre, parametre, sigle, congetype FROM personnel_etatprofessionnel_parametes ORDER BY id_parametre"
     return Response(_run_stats_query(sql))
 
 
@@ -922,7 +942,7 @@ _PARAMS_TABLES = {
     'personnel_conge_types':                {'pk': 'id_congetype',       'cols': ['congename', 'nbrePredefini', 'totalJours'], 'label': 'Types de Congé'},
     'personnel_diplome':                    {'pk': 'id_diplome',         'cols': ['diplome', 'sigle'],              'label': 'Diplômes'},
     'personnel_domaine':                    {'pk': 'id_domaine',         'cols': ['domaine', 'sigle'],              'label': 'Domaines'},
-    'personnel_etatprofessionnel_parametes': {'pk': 'id_parametre',       'cols': ['parametre', 'sigle'],            'label': 'États Professionnels'},
+    'personnel_etatprofessionnel_parametes': {'pk': 'id_parametre',       'cols': ['parametre', 'sigle', 'congetype'], 'label': 'États Professionnels'},
     'personnel_grade':                      {'pk': 'id_grade',           'cols': ['grade', 'sigle'],                'label': 'Grades'},
     'personnel_service':                    {'pk': 'id_service',         'cols': ['service'],                       'label': 'Services'},
     'personnel_specialite':                 {'pk': 'id_specialite',      'cols': ['specialite', 'sigle'],           'label': 'Spécialités'},
