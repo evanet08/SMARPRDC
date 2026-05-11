@@ -87,6 +87,9 @@
                 <button class="tab-btn" data-tab="tab-liste-declarative" onclick="switchTab('tab-liste-declarative', this);loadListeDeclarative()" id="btn-tab-liste-declarative">
                     <span>📜</span> Liste Déclarative
                 </button>
+                <button class="tab-btn" data-tab="tab-params" onclick="switchTab('tab-params', this);loadParamsTab()" id="btn-tab-params">
+                    <span>⚙️</span> Paramètres de base
+                </button>
             </div>
 
             <!-- ═══ TAB 1: VUE GLOBALE ═══ -->
@@ -356,6 +359,44 @@
             <div class="modal-footer">
                 <button class="btn btn-outline" onclick="closeModal('modal-conge')">Annuler</button>
                 <button class="btn btn-success" onclick="saveConge()" id="btn-save-conge">💾 Enregistrer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ TAB 6: PARAMÈTRES DE BASE ═══ -->
+    <div class="tab-panel" id="tab-params">
+        <div class="params-layout">
+            <div class="params-sidebar" id="params-sidebar">
+                <div class="params-sidebar-title">⚙️ Tables de référence</div>
+                <div id="params-sidebar-list"></div>
+            </div>
+            <div class="params-main">
+                <div class="params-main-header">
+                    <h3 id="params-table-title">Sélectionnez une table</h3>
+                    <button class="btn btn-primary" id="btn-add-param" onclick="openParamForm()" style="display:none">➕ Ajouter</button>
+                </div>
+                <div id="params-form-container" style="display:none">
+                    <div class="params-form-card" id="params-form-card">
+                        <div class="params-form-title" id="params-form-title">Nouveau</div>
+                        <div id="params-form-fields"></div>
+                        <div class="params-form-actions">
+                            <button class="btn btn-outline" onclick="cancelParamForm()">Annuler</button>
+                            <button class="btn btn-success" onclick="saveParam()">💾 Enregistrer</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-card">
+                    <div class="table-scroll">
+                        <table class="data-table" id="params-data-table">
+                            <thead id="params-thead"></thead>
+                            <tbody id="params-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="empty-state" id="params-empty" style="display:none">
+                    <div class="empty-state-icon">📊</div>
+                    <p class="empty-state-text">Sélectionnez une table dans la barre latérale</p>
+                </div>
             </div>
         </div>
     </div>

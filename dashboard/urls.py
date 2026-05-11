@@ -46,4 +46,8 @@ urlpatterns = [
 
     # ── Institution ───────────────────────────────────────────────────────
     path('stats/institution', views.institution_info, name='institution-info'),
+
+    # ── Paramètres de base (CRUD) ─────────────────────────────────────────
+    path('carriere/api/params/tables', views.params_tables_list, name='params-tables-list'),
+    path('carriere/api/params/crud', views.params_crud, name='params-crud'),
 ]

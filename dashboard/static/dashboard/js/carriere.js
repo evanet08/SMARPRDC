@@ -1183,5 +1183,238 @@ function exportDeclarativeExcel() {
     XLSX.writeFile(wb, 'SMAPRDC_Liste_Declarative_' + new Date().toISOString().slice(0, 10) + '.xlsx');
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  PARAMÈTRES DE BASE — Generic CRUD for reference tables
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let _paramsTables = [];       // [{table, pk, cols, label}, ...]
+let _paramsCurrentTable = null; // currently selected table meta
+let _paramsData = [];         // rows of current table
+let _paramsEditId = null;     // PK value being edited (null = create mode)
+let _paramsTabLoaded = false;
+
+// Column display labels for better UX
+const _COL_LABELS = {
+    categorie: 'Catégorie', sigle: 'Sigle', congename: 'Nom du congé',
+    nbrePredefini: 'Prédéfini', totalJours: 'Total jours', diplome: 'Diplôme',
+    domaine: 'Domaine', parametre: 'Paramètre', grade: 'Grade',
+    service: 'Service', specialite: 'Spécialité', type: 'Type',
+    vacation: 'Vacation', profession: 'Profession', id_secteur: 'ID Secteur'
+};
+
+function _colLabel(col) { return _COL_LABELS[col] || col.charAt(0).toUpperCase() + col.slice(1); }
+
+async function loadParamsTab() {
+    if (_paramsTabLoaded) return;
+    try {
+        const res = await fetch(API + '/params/tables');
+        _paramsTables = await res.json();
+        _renderParamsSidebar();
+        _paramsTabLoaded = true;
+    } catch (e) {
+        toast('Erreur chargement paramètres: ' + e.message, 'error');
+    }
+}
+
+function _renderParamsSidebar() {
+    const list = document.getElementById('params-sidebar-list');
+    list.innerHTML = _paramsTables.map(t =>
+        `<div class="params-sidebar-item" data-table="${t.table}" onclick="_selectParamsTable('${t.table}')">
+            <span>${t.label}</span>
+            <span class="item-count" id="count-${t.table}">…</span>
+        </div>`
+    ).join('');
+
+    // Preload counts
+    _paramsTables.forEach(async t => {
+        try {
+            const res = await fetch(API + '/params/crud?table=' + t.table);
+            const rows = await res.json();
+            const el = document.getElementById('count-' + t.table);
+            if (el) el.textContent = rows.length;
+        } catch (e) { /* ignore */ }
+    });
+}
+
+async function _selectParamsTable(tableName) {
+    const meta = _paramsTables.find(t => t.table === tableName);
+    if (!meta) return;
+    _paramsCurrentTable = meta;
+    _paramsEditId = null;
+
+    // Highlight sidebar
+    document.querySelectorAll('.params-sidebar-item').forEach(el => el.classList.remove('active'));
+    document.querySelector(`.params-sidebar-item[data-table="${tableName}"]`)?.classList.add('active');
+
+    // Update header
+    document.getElementById('params-table-title').textContent = meta.label;
+    document.getElementById('btn-add-param').style.display = '';
+    document.getElementById('params-empty').style.display = 'none';
+    document.getElementById('params-form-container').style.display = 'none';
+
+    // Load data
+    try {
+        const res = await fetch(API + '/params/crud?table=' + tableName);
+        _paramsData = await res.json();
+        _renderParamsTable();
+        // Update count in sidebar
+        const el = document.getElementById('count-' + tableName);
+        if (el) el.textContent = _paramsData.length;
+    } catch (e) {
+        toast('Erreur chargement: ' + e.message, 'error');
+    }
+}
+
+function _renderParamsTable() {
+    const meta = _paramsCurrentTable;
+    if (!meta) return;
+
+    // Header
+    const thead = document.getElementById('params-thead');
+    thead.innerHTML = '<tr>' +
+        '<th style="width:50px;text-align:center">#</th>' +
+        meta.cols.map(c => `<th>${_colLabel(c)}</th>`).join('') +
+        '<th style="width:100px;text-align:center">Actions</th>' +
+        '</tr>';
+
+    // Body
+    const tbody = document.getElementById('params-tbody');
+    if (!_paramsData.length) {
+        tbody.innerHTML = `<tr><td colspan="${meta.cols.length + 2}" style="text-align:center;padding:20px;color:#94a3b8">Aucune donnée</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = _paramsData.map((row, idx) => {
+        const pkVal = row[meta.pk];
+        return '<tr>' +
+            `<td style="text-align:center;color:#94a3b8;font-size:.75rem">${idx + 1}</td>` +
+            meta.cols.map(c => {
+                let val = row[c];
+                // Boolean display
+                if (c === 'nbrePredefini') val = val ? '✓ Oui' : '✗ Non';
+                return `<td>${val != null ? val : '—'}</td>`;
+            }).join('') +
+            `<td style="text-align:center">
+                <button class="params-action-btn edit" title="Modifier" onclick="_editParam(${pkVal})">✏️</button>
+                <button class="params-action-btn delete" title="Supprimer" onclick="_deleteParam(${pkVal})">🗑️</button>
+            </td>` +
+            '</tr>';
+    }).join('');
+}
+
+function openParamForm(editRow) {
+    const meta = _paramsCurrentTable;
+    if (!meta) return;
+    const container = document.getElementById('params-form-container');
+    const title = document.getElementById('params-form-title');
+    const fields = document.getElementById('params-form-fields');
+
+    _paramsEditId = editRow ? editRow[meta.pk] : null;
+    title.textContent = _paramsEditId ? 'Modifier' : 'Nouveau';
+
+    // Generate form fields
+    fields.innerHTML = '<div class="params-form-fields">' +
+        meta.cols.map(c => {
+            const val = editRow ? (editRow[c] != null ? editRow[c] : '') : '';
+            let inputHtml;
+            if (c === 'nbrePredefini') {
+                inputHtml = `<select class="form-control" id="pf-${c}">
+                    <option value="0" ${!val ? 'selected' : ''}>Non</option>
+                    <option value="1" ${val ? 'selected' : ''}>Oui</option>
+                </select>`;
+            } else if (c === 'totalJours' || c === 'id_secteur') {
+                inputHtml = `<input type="number" class="form-control" id="pf-${c}" value="${val}" min="0" placeholder="—">`;
+            } else {
+                inputHtml = `<input type="text" class="form-control" id="pf-${c}" value="${val}" placeholder="${_colLabel(c)}">`;
+            }
+            return `<div class="form-group">
+                <label class="form-label" for="pf-${c}">${_colLabel(c)}</label>
+                ${inputHtml}
+            </div>`;
+        }).join('') +
+        '</div>';
+
+    container.style.display = '';
+    // Focus first field
+    setTimeout(() => { const first = fields.querySelector('input,select'); if (first) first.focus(); }, 50);
+}
+
+function cancelParamForm() {
+    document.getElementById('params-form-container').style.display = 'none';
+    _paramsEditId = null;
+}
+
+async function saveParam() {
+    const meta = _paramsCurrentTable;
+    if (!meta) return;
+
+    const data = {};
+    meta.cols.forEach(c => {
+        const el = document.getElementById('pf-' + c);
+        if (!el) return;
+        let val = el.value;
+        if (c === 'nbrePredefini' || c === 'totalJours' || c === 'id_secteur') val = parseInt(val) || 0;
+        data[c] = val;
+    });
+
+    // Validate: at least the main column must have a value
+    const mainCol = meta.cols[0];
+    if (!data[mainCol] || !String(data[mainCol]).trim()) {
+        toast('Le champ "' + _colLabel(mainCol) + '" est obligatoire', 'error');
+        return;
+    }
+
+    const action = _paramsEditId ? 'update' : 'create';
+    if (_paramsEditId) data[meta.pk] = _paramsEditId;
+
+    try {
+        const res = await apiPost(API + '/params/crud?table=' + meta.table, {
+            table: meta.table, action: action, data: data
+        });
+        if (res.success) {
+            toast(action === 'create' ? 'Enregistrement créé ✓' : 'Modification enregistrée ✓', 'success');
+            cancelParamForm();
+            await _selectParamsTable(meta.table);
+        } else {
+            toast('Erreur: ' + (res.error || 'Inconnue'), 'error');
+        }
+    } catch (e) {
+        toast('Erreur réseau: ' + e.message, 'error');
+    }
+}
+
+function _editParam(pkVal) {
+    const meta = _paramsCurrentTable;
+    if (!meta) return;
+    const row = _paramsData.find(r => r[meta.pk] === pkVal);
+    if (!row) return;
+    openParamForm(row);
+}
+
+async function _deleteParam(pkVal) {
+    const meta = _paramsCurrentTable;
+    if (!meta) return;
+    const row = _paramsData.find(r => r[meta.pk] === pkVal);
+    const label = row ? (row[meta.cols[0]] || pkVal) : pkVal;
+
+    if (!confirm(`Supprimer "${label}" ?\n\nCette action est irréversible.`)) return;
+
+    try {
+        const data = {};
+        data[meta.pk] = pkVal;
+        const res = await apiPost(API + '/params/crud?table=' + meta.table, {
+            table: meta.table, action: 'delete', data: data
+        });
+        if (res.success) {
+            toast('Enregistrement supprimé ✓', 'success');
+            await _selectParamsTable(meta.table);
+        } else {
+            toast('Erreur: ' + (res.error || 'Inconnue'), 'error');
+        }
+    } catch (e) {
+        toast('Erreur réseau: ' + e.message, 'error');
+    }
+}
+
 // ═══ INIT ════════════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', loadAll);

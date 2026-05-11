@@ -311,14 +311,16 @@ def presence_personnel_detail(request):
         # A congé covers a date range [startdate, enddate].
         # Any personnel on congé for a given date is UNAVAILABLE on that date.
         cursor.execute("""
-            SELECT pc.id_personnel, pc.startdate, pc.enddate
+            SELECT pc.id_personnel, pc.startdate, pc.enddate,
+                   IFNULL(ct.congename, 'En congé') AS congename
             FROM personnel_conges pc
             JOIN personnel p ON p.id_personnel = pc.id_personnel
+            LEFT JOIN personnel_conge_types ct ON ct.id_congetype = pc.id_congetype
             WHERE p.isAdministratif = 1 AND p.en_fonction = 1 AND p.id_personnel != 1
               AND pc.enddate >= %s AND pc.startdate <= %s
         """, [month_start_str, month_end_str])
         conge_rows = _dictfetchall(cursor)
-        # Build lookup: id_personnel → list of (startdate, enddate) ranges
+        # Build lookup: id_personnel → list of (startdate, enddate, congename) ranges
         conge_map = {}
         for cr in conge_rows:
             pid = cr['id_personnel']
@@ -326,7 +328,7 @@ def presence_personnel_detail(request):
                 conge_map[pid] = []
             sd = cr['startdate'] if isinstance(cr['startdate'], date) else date.fromisoformat(str(cr['startdate']))
             ed = cr['enddate'] if isinstance(cr['enddate'], date) else date.fromisoformat(str(cr['enddate']))
-            conge_map[pid].append((sd, ed))
+            conge_map[pid].append((sd, ed, cr['congename']))
 
         cursor.execute("""
             SELECT pp.id_personnel,
@@ -377,11 +379,11 @@ def presence_personnel_detail(request):
         return str(t)
 
     def _is_on_conge(pid, dt):
-        """Check if a personnel has an active congé on a given date."""
-        for sd, ed in conge_map.get(pid, []):
+        """Check if a personnel has an active congé on a given date. Returns congé type name or None."""
+        for sd, ed, cname in conge_map.get(pid, []):
             if sd <= dt <= ed:
-                return True
-        return False
+                return cname
+        return None
 
     def _has_non_enfx_etat(pid):
         """Check if a personnel has a non-EnFx professional status."""
@@ -435,9 +437,11 @@ def presence_personnel_detail(request):
             if non_enfx:
                 unavail_reason = non_enfx['parametre']
                 unavail_sigle = non_enfx['sigle']
-            elif _is_on_conge(aid, jour_dt):
-                unavail_reason = 'En congé'
-                unavail_sigle = 'Cg'
+            else:
+                conge_name = _is_on_conge(aid, jour_dt)
+                if conge_name:
+                    unavail_reason = conge_name
+                    unavail_sigle = 'Cg'
 
             if unavail_reason:
                 # Person is NOT AVAILABLE on this date:
@@ -906,3 +910,87 @@ def institution_info(request):
         data['logo_pays_url'] = '/static/dashboard/img/logoRDC.jpg'
 
     return Response(data)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  PARAMÈTRES DE BASE — Generic CRUD for reference tables
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Whitelist of allowed tables with their schema
+_PARAMS_TABLES = {
+    'personnel_categorie':                  {'pk': 'id_categorie',       'cols': ['categorie', 'sigle'],            'label': 'Catégories'},
+    'personnel_conge_types':                {'pk': 'id_congetype',       'cols': ['congename', 'nbrePredefini', 'totalJours'], 'label': 'Types de Congé'},
+    'personnel_diplome':                    {'pk': 'id_diplome',         'cols': ['diplome', 'sigle'],              'label': 'Diplômes'},
+    'personnel_domaine':                    {'pk': 'id_domaine',         'cols': ['domaine', 'sigle'],              'label': 'Domaines'},
+    'personnel_etatprofessionnel_parametes': {'pk': 'id_parametre',       'cols': ['parametre', 'sigle'],            'label': 'États Professionnels'},
+    'personnel_grade':                      {'pk': 'id_grade',           'cols': ['grade', 'sigle'],                'label': 'Grades'},
+    'personnel_service':                    {'pk': 'id_service',         'cols': ['service'],                       'label': 'Services'},
+    'personnel_specialite':                 {'pk': 'id_specialite',      'cols': ['specialite', 'sigle'],           'label': 'Spécialités'},
+    'personnel_type':                       {'pk': 'id_personnel_type',  'cols': ['type', 'sigle'],                 'label': 'Types de Personnel'},
+    'personnel_vacation':                   {'pk': 'id_vacation',        'cols': ['vacation', 'sigle'],             'label': 'Vacations'},
+    'professions':                          {'pk': 'id_profession',      'cols': ['profession'],                    'label': 'Professions'},
+}
+
+
+@api_view(['GET'])
+def params_tables_list(request):
+    """Return the list of manageable tables with their metadata."""
+    result = []
+    for table_name, meta in _PARAMS_TABLES.items():
+        result.append({'table': table_name, 'pk': meta['pk'], 'cols': meta['cols'], 'label': meta['label']})
+    return Response(result)
+
+
+@api_view(['GET', 'POST'])
+def params_crud(request):
+    """Generic CRUD for whitelisted reference tables.
+    GET:  ?table=personnel_grade → list all rows
+    POST: {table, action: 'create'|'update'|'delete', data: {...}}
+    """
+    table = request.GET.get('table') or request.data.get('table', '')
+    if table not in _PARAMS_TABLES:
+        return Response({'success': False, 'error': f'Table non autorisée: {table}'}, status=400)
+
+    meta = _PARAMS_TABLES[table]
+    pk_col = meta['pk']
+    cols = meta['cols']
+
+    if request.method == 'GET':
+        all_cols = ', '.join([pk_col] + cols)
+        with connection.cursor() as cursor:
+            cursor.execute(f'SELECT {all_cols} FROM {table} ORDER BY {pk_col}')
+            return Response(_dictfetchall(cursor))
+
+    # POST — create / update / delete
+    action = request.data.get('action', '')
+    data = request.data.get('data', {})
+
+    if action == 'create':
+        values = [data.get(c, '') for c in cols]
+        placeholders = ', '.join(['%s'] * len(cols))
+        col_list = ', '.join(cols)
+        with connection.cursor() as cursor:
+            cursor.execute(f'INSERT INTO {table} ({col_list}) VALUES ({placeholders})', values)
+            new_id = cursor.lastrowid
+        return Response({'success': True, 'id': new_id})
+
+    elif action == 'update':
+        pk_val = data.get(pk_col)
+        if not pk_val:
+            return Response({'success': False, 'error': f'{pk_col} requis'}, status=400)
+        set_parts = [f'{c} = %s' for c in cols]
+        values = [data.get(c, '') for c in cols]
+        values.append(pk_val)
+        with connection.cursor() as cursor:
+            cursor.execute(f'UPDATE {table} SET {", ".join(set_parts)} WHERE {pk_col} = %s', values)
+        return Response({'success': True})
+
+    elif action == 'delete':
+        pk_val = data.get(pk_col)
+        if not pk_val:
+            return Response({'success': False, 'error': f'{pk_col} requis'}, status=400)
+        with connection.cursor() as cursor:
+            cursor.execute(f'DELETE FROM {table} WHERE {pk_col} = %s', [pk_val])
+        return Response({'success': True})
+
+    return Response({'success': False, 'error': f'Action inconnue: {action}'}, status=400)
